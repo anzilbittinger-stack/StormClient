@@ -3,8 +3,10 @@ package dev.stormclient;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -17,6 +19,7 @@ public final class StormClient implements ClientModInitializer {
     public static boolean airJumpEnabled = true;
     public static boolean fullbrightEnabled = false;
     public static boolean autoSprintEnabled = false;
+    public static boolean baseFinderEnabled = true;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
@@ -42,6 +45,15 @@ public final class StormClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_C,
                 CATEGORY
         ));
+
+        ClientSendMessageEvents.ALLOW_CHAT.register(message -> {
+            if (message.equalsIgnoreCase("#base") || message.equalsIgnoreCase("#base list")
+                    || message.equalsIgnoreCase("#base clear")) {
+                Minecraft.getInstance().execute(() -> BaseFinder.handleChatCommand(message));
+                return false;
+            }
+            return true;
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openGuiKey.consumeClick()) {
