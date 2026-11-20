@@ -56,10 +56,6 @@ public final class StormClickGuiScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C"), button -> {})
                     .bounds(left + 20, top + 123, panelWidth - 40, 25).build());
         } else {
-            addRenderableWidget(Button.builder(Component.literal("Base Finder: planned"), button -> {})
-                    .bounds(left + 20, top + 91, panelWidth - 40, 25).build());
-            addRenderableWidget(Button.builder(Component.literal("Waypoints: planned"), button -> {})
-                    .bounds(left + 20, top + 123, panelWidth - 40, 25).build());
         }
 
         addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
@@ -109,9 +105,11 @@ public final class StormClickGuiScreen extends Screen {
             graphics.text(this.font, "Zoom is hold-to-use on the C key.", left + 20, top + 222, 0xFFB7C7DC, false);
         } else {
             graphics.text(this.font, "WORLD & UTILITY", left + 20, top + 78, 0xFF75BFFF, true);
-            graphics.text(this.font, "Dupe compatibility: NOT VERIFIED for PearSMP.", left + 20, top + 166, 0xFFFFC978, false);
+            graphics.text(this.font, "Base Finder: planned; not implemented yet.", left + 20, top + 112, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Waypoints: planned; not implemented yet.", left + 20, top + 133, 0xFFB7C7DC, false);
+            graphics.text(this.font, "PearSMP dupe: compatibility NOT VERIFIED.", left + 20, top + 166, 0xFFFFC978, false);
             graphics.text(this.font, "There is no universal client-side multiplayer dupe.", left + 20, top + 187, 0xFFB7C7DC, false);
-            graphics.text(this.font, "We won't show a fake button as a working exploit.", left + 20, top + 208, 0xFFB7C7DC, false);
+            graphics.text(this.font, "No fake activation button until a method is verified.", left + 20, top + 208, 0xFFB7C7DC, false);
         }
     }
 }
