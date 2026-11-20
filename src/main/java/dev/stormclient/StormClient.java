@@ -16,6 +16,7 @@ public final class StormClient implements ClientModInitializer {
 
     public static boolean airJumpEnabled = true;
     public static boolean fullbrightEnabled = false;
+    public static boolean autoSprintEnabled = false;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
@@ -55,6 +56,10 @@ public final class StormClient implements ClientModInitializer {
                     originalFov = -1;
                 }
                 return;
+            }
+
+            if (autoSprintEnabled && client.player.input.hasForwardImpulse()) {
+                client.player.setSprinting(true);
             }
 
             boolean jumpDown = client.options.keyJump.isDown();
