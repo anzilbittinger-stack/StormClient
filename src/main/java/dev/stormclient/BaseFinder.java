@@ -9,6 +9,7 @@ import java.util.Map;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.Level;
 
@@ -35,20 +36,22 @@ public final class BaseFinder {
             tell("Saved base markers:");
             for (int i = 0; i < WAYPOINTS.size(); i++) {
                 Waypoint point = WAYPOINTS.get(i);
-                tell((i + 1) + ". " + point.name + " at " + point.x + " " + point.y + " " + point.z);
+                tell((i + 1) + ". " + point.name + " at " + point.x + " " + point.y + " " + point.z
+                        + " | score " + point.score);
             }
             return;
         }
 
+        if (!command.equals("#base")) return;
         if (!StormClient.baseFinderEnabled) {
             tell("Base Finder is OFF. Enable it in StormClient > Utility.");
             return;
         }
 
-        tell("Scanning nearby loaded chunks for possible base activity...");
+        tell("Scanning nearby loaded chunks (48-block radius)...");
         Candidate candidate = scan(client.level, client.player.blockPosition());
         if (candidate == null || candidate.score < 5) {
-            tell("No convincing base candidate found nearby. Only loaded chunks can be scanned.");
+            tell("No likely base activity found. This only checks blocks already loaded by your client.");
             return;
         }
 
@@ -58,9 +61,9 @@ public final class BaseFinder {
         String name = "Base " + (WAYPOINTS.size() + 1);
         WAYPOINTS.add(new Waypoint(name, x, y, z, candidate.score));
         double distance = Math.sqrt(client.player.distanceToSqr(x + 0.5, y + 0.5, z + 0.5));
-        tell("Possible base found: " + name + " at " + x + " " + y + " " + z
+        tell("Possible base: " + name + " at " + x + " " + y + " " + z
                 + " | score " + candidate.score + " | " + Math.round(distance) + " blocks away.");
-        tell("Marker saved for this session. Use #base list or #base clear.");
+        tell("Saved for this session. Use #base list or #base clear.");
     }
 
     private static Candidate scan(Level level, BlockPos origin) {
@@ -71,12 +74,14 @@ public final class BaseFinder {
 
         for (int x = origin.getX() - radius; x <= origin.getX() + radius; x++) {
             for (int z = origin.getZ() - radius; z <= origin.getZ() + radius; z++) {
+                // Check the chunk once per vertical column instead of once per block.
+                if (!level.hasChunkAt(new BlockPos(x, minY, z))) continue;
+
                 for (int y = minY; y <= maxY; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
-                    if (!level.hasChunkAt(pos)) continue;
-
-                    String block = level.getBlockState(pos).toString().toLowerCase(Locale.ROOT);
-                    int weight = weight(block);
+                    String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
+                            .getPath().toLowerCase(Locale.ROOT);
+                    int weight = weight(blockId);
                     if (weight == 0) continue;
 
                     int chunkX = x >> 4;
@@ -99,19 +104,17 @@ public final class BaseFinder {
     }
 
     private static int weight(String block) {
-        if (block.contains("ender_chest") || block.contains("chest") || block.contains("barrel")
-                || block.contains("shulker_box")) return 3;
-        if (block.contains("crafting_table") || block.contains("furnace")
-                || block.contains("smoker") || block.contains("blast_furnace")
-                || block.contains("hopper")) return 2;
-        if (block.contains("_bed") || block.contains("_door") || block.contains("anvil")
-                || block.contains("brewing_stand")) return 1;
+        if (block.equals("ender_chest") || block.equals("chest") || block.equals("trapped_chest")
+                || block.equals("barrel") || block.endsWith("_shulker_box")) return 3;
+        if (block.equals("crafting_table") || block.equals("furnace") || block.equals("smoker")
+                || block.equals("blast_furnace") || block.equals("hopper")) return 2;
+        if (block.endsWith("_bed") || block.endsWith("_door") || block.equals("anvil")
+                || block.equals("brewing_stand")) return 1;
         return 0;
     }
 
     private static void tell(String message) {
-        Minecraft client = Minecraft.getInstance();
-        client.showDebugChat(Component.literal("[StormClient] " + message));
+        Minecraft.getInstance().showDebugChat(Component.literal("[StormClient] " + message));
     }
 
     private static final class Candidate {
