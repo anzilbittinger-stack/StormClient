@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public final class StormClickGuiScreen extends Screen {
-    private enum Page { MOVEMENT, VISUALS, UTILITY }
+    private enum Page { MOVEMENT, VISUALS, UTILITY, DUPE_LAB }
     private final Page page;
 
     public StormClickGuiScreen() {
@@ -29,11 +29,11 @@ public final class StormClickGuiScreen extends Screen {
         int left = (this.width - panelWidth) / 2;
         int top = Math.max(16, (this.height - 310) / 2);
         int tabY = top + 43;
-        int tabWidth = 122;
 
-        addRenderableWidget(tab("MOVEMENT", Page.MOVEMENT, left + 16, tabY, tabWidth));
-        addRenderableWidget(tab("VISUALS", Page.VISUALS, left + 154, tabY, tabWidth));
-        addRenderableWidget(tab("UTILITY", Page.UTILITY, left + 292, tabY, tabWidth));
+        addRenderableWidget(tab("MOVEMENT", Page.MOVEMENT, left + 14, tabY, 96));
+        addRenderableWidget(tab("VISUALS", Page.VISUALS, left + 113, tabY, 96));
+        addRenderableWidget(tab("UTILITY", Page.UTILITY, left + 212, tabY, 96));
+        addRenderableWidget(tab("DUPE LAB", Page.DUPE_LAB, left + 311, tabY, 105));
 
         if (page == Page.MOVEMENT) {
             addRenderableWidget(Button.builder(airJumpLabel(), button -> {
@@ -60,8 +60,12 @@ public final class StormClickGuiScreen extends Screen {
             }).bounds(left + 20, top + 91, panelWidth - 40, 25).build());
             addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C"), button -> {})
                     .bounds(left + 20, top + 123, panelWidth - 40, 25).build());
-        } else {
+        } else if (page == Page.UTILITY) {
             addRenderableableBaseButton(left, top, panelWidth);
+        } else {
+            addRenderableWidget(Button.builder(Component.literal("Inspect Inventory + Bundles"), button ->
+                    BundleInspector.inspect())
+                    .bounds(left + 20, top + 105, panelWidth - 40, 30).build());
         }
 
         addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
@@ -125,13 +129,19 @@ public final class StormClickGuiScreen extends Screen {
             graphics.text(this.font, "VISUAL MODULES", left + 20, top + 78, 0xFF75BFFF, true);
             graphics.text(this.font, "Fullbright changes your local gamma setting.", left + 20, top + 205, 0xFFB7C7DC, false);
             graphics.text(this.font, "Zoom is hold-to-use on the C key.", left + 20, top + 222, 0xFFB7C7DC, false);
-        } else {
+        } else if (page == Page.UTILITY) {
             graphics.text(this.font, "WORLD & UTILITY", left + 20, top + 78, 0xFF75BFFF, true);
             graphics.text(this.font, "Use #base to scan nearby loaded chunks.", left + 20, top + 145, 0xFFB7C7DC, false);
             graphics.text(this.font, "Use #base list / #base clear for saved markers.", left + 20, top + 164, 0xFFB7C7DC, false);
             graphics.text(this.font, "Duping requires server support; client toggles", left + 20, top + 198, 0xFFFFC978, false);
             graphics.text(this.font, "cannot create server-side items on Paper.", left + 20, top + 215, 0xFFFFC978, false);
             graphics.text(this.font, "Scanner sees loaded chunks only; results are guesses.", left + 20, top + 235, 0xFFB7C7DC, false);
+        } else {
+            graphics.text(this.font, "BUNDLE / INVENTORY DIAGNOSTICS", left + 20, top + 83, 0xFF75BFFF, true);
+            graphics.text(this.font, "Scans your inventory and counts bundle stacks.", left + 20, top + 157, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Reports repeated item types and open-menu slots.", left + 20, top + 176, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Read-only: no packet spam, slot edits, or disconnects.", left + 20, top + 205, 0xFFB7C7DC, false);
+            graphics.text(this.font, "This is a diagnostic tool, not a working dupe.", left + 20, top + 229, 0xFFFFC978, false);
         }
     }
 }
