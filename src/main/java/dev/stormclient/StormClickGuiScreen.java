@@ -46,8 +46,13 @@ public final class StormClickGuiScreen extends Screen {
                 button.setMessage(sprintLabel());
             }).bounds(left + 20, top + 123, panelWidth - 40, 25).build());
 
+            addRenderableWidget(Button.builder(elytraLabel(), button -> {
+                StormClient.elytraAssistEnabled = !StormClient.elytraAssistEnabled;
+                button.setMessage(elytraLabel());
+            }).bounds(left + 20, top + 155, panelWidth - 40, 25).build());
+
             addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C"), button -> {})
-                    .bounds(left + 20, top + 155, panelWidth - 40, 25).build());
+                    .bounds(left + 20, top + 187, panelWidth - 40, 25).build());
         } else if (page == Page.VISUALS) {
             addRenderableWidget(Button.builder(fullbrightLabel(), button -> {
                 StormClient.fullbrightEnabled = !StormClient.fullbrightEnabled;
@@ -56,14 +61,18 @@ public final class StormClickGuiScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C"), button -> {})
                     .bounds(left + 20, top + 123, panelWidth - 40, 25).build());
         } else {
-            addRenderableWidget(Button.builder(baseFinderLabel(), button -> {
-                StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled;
-                button.setMessage(baseFinderLabel());
-            }).bounds(left + 20, top + 91, panelWidth - 40, 25).build());
+            addRenderableableBaseButton(left, top, panelWidth);
         }
 
         addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
                 .bounds(left + 20, top + 267, panelWidth - 40, 22).build());
+    }
+
+    private void addRenderableableBaseButton(int left, int top, int panelWidth) {
+        addRenderableWidget(Button.builder(baseFinderLabel(), button -> {
+            StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled;
+            button.setMessage(baseFinderLabel());
+        }).bounds(left + 20, top + 91, panelWidth - 40, 25).build());
     }
 
     private Button tab(String label, Page target, int x, int y, int width) {
@@ -78,6 +87,10 @@ public final class StormClickGuiScreen extends Screen {
 
     private static Component sprintLabel() {
         return Component.literal("Auto Sprint: " + (StormClient.autoSprintEnabled ? "ON" : "OFF"));
+    }
+
+    private static Component elytraLabel() {
+        return Component.literal("Elytra Assist: " + (StormClient.elytraAssistEnabled ? "ON" : "OFF"));
     }
 
     private static Component fullbrightLabel() {
@@ -105,8 +118,9 @@ public final class StormClickGuiScreen extends Screen {
 
         if (page == Page.MOVEMENT) {
             graphics.text(this.font, "MOVEMENT MODULES", left + 20, top + 78, 0xFF75BFFF, true);
-            graphics.text(this.font, "Air Jump lets you jump again while airborne.", left + 20, top + 205, 0xFFB7C7DC, false);
-            graphics.text(this.font, "Auto Sprint sprints while you move forward.", left + 20, top + 222, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Air Jump lets you jump again while airborne.", left + 20, top + 218, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Elytra Assist gently trims pitch toward -10 degrees.", left + 20, top + 235, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Hold Sneak to pause Elytra Assist while gliding.", left + 20, top + 252, 0xFFB7C7DC, false);
         } else if (page == Page.VISUALS) {
             graphics.text(this.font, "VISUAL MODULES", left + 20, top + 78, 0xFF75BFFF, true);
             graphics.text(this.font, "Fullbright changes your local gamma setting.", left + 20, top + 205, 0xFFB7C7DC, false);
@@ -115,8 +129,9 @@ public final class StormClickGuiScreen extends Screen {
             graphics.text(this.font, "WORLD & UTILITY", left + 20, top + 78, 0xFF75BFFF, true);
             graphics.text(this.font, "Use #base to scan nearby loaded chunks.", left + 20, top + 145, 0xFFB7C7DC, false);
             graphics.text(this.font, "Use #base list / #base clear for saved markers.", left + 20, top + 164, 0xFFB7C7DC, false);
-            graphics.text(this.font, "PearSMP dupe: no compatible method verified yet.", left + 20, top + 198, 0xFFFFC978, false);
-            graphics.text(this.font, "The scanner cannot see unexplored or unloaded chunks.", left + 20, top + 219, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Duping requires server support; client toggles", left + 20, top + 198, 0xFFFFC978, false);
+            graphics.text(this.font, "cannot create server-side items on Paper.", left + 20, top + 215, 0xFFFFC978, false);
+            graphics.text(this.font, "Scanner sees loaded chunks only; results are guesses.", left + 20, top + 235, 0xFFB7C7DC, false);
         }
     }
 }
