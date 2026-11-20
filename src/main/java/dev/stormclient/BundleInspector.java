@@ -13,18 +13,28 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Read-only inventory diagnostics. This deliberately sends no packets and
  * never changes slots, item stacks, containers, or connection state.
+ *
+ * The first scan records a local baseline. Later scans compare item totals
+ * against that baseline and report changes; this is diagnostic evidence only,
+ * not proof that the server duplicated or rolled back an item.
  */
 public final class BundleInspector {
+    private static Map<String, Integer> baseline;
+    private static int baselineTotal;
+    private static int baselineOccupied;
+    private static int baselineMenuSlots;
+
     private BundleInspector() {}
 
     public static void inspect() {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
-            tell("Dupe Lab: join a world or server before inspecting your inventory.");
+            tell("Join a world or server before inspecting your inventory.");
             return;
         }
 
         Map<String, ItemSummary> summaries = new LinkedHashMap<>();
+        Map<String, Integer> currentTotals = new LinkedHashMap<>();
         List<Integer> bundleSlots = new ArrayList<>();
         int occupiedStacks = 0;
         int totalItems = 0;
@@ -40,6 +50,7 @@ public final class BundleInspector {
             String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM
                     .getKey(stack.getItem()).toString();
             String displayName = stack.getHoverName().getString();
+            currentTotals.merge(itemId, stack.getCount(), Integer::sum);
             summaries.compute(itemId, (key, current) -> {
                 if (current == null) return new ItemSummary(itemId, displayName, 1, stack.getCount());
                 current.stacks++;
@@ -52,9 +63,26 @@ public final class BundleInspector {
             }
         }
 
-        tell("Inventory snapshot: " + occupiedStacks + " occupied stacks, " + totalItems
-                + " total items, " + bundleSlots.size() + " bundle stack(s).");
-        tell("Open menu slot count: " + client.player.containerMenu.slots.size() + ".");
+        int menuSlots = client.player.containerMenu.slots.size();
+        tell("Snapshot: " + occupiedStacks + " occupied stacks, " + totalItems
+                + " total items, " + bundleSlots.size() + " bundle stack(s), "
+                + menuSlots + " open-menu slots.");
+
+        if (baseline == null) {
+            baseline = new LinkedHashMap<>(currentTotals);
+            baselineTotal = totalItems;
+            baselineOccupied = occupiedStacks;
+            baselineMenuSlots = menuSlots;
+            tell("BASELINE SAVED. Scan again after your test to compare inventory totals.");
+        } else {
+            reportChanges(currentTotals, totalItems, occupiedStacks, menuSlots);
+            baseline = new LinkedHashMap<>(currentTotals);
+            baselineTotal = totalItems;
+            baselineOccupied = occupiedStacks;
+            baselineMenuSlots = menuSlots;
+            tell("Baseline refreshed. The next scan compares against this snapshot.");
+        }
+
         if (bundleSlots.isEmpty()) {
             tell("No bundle item found in your player inventory.");
         } else {
@@ -77,7 +105,38 @@ public final class BundleInspector {
             }
         }
 
-        tell("Read-only scan only: it cannot verify server-side rollback or create items.");
+        tell("Read-only scan: no packets sent, no slot edits, and no forced disconnects.");
+    }
+
+    private static void reportChanges(Map<String, Integer> current, int totalItems,
+                                      int occupiedStacks, int menuSlots) {
+        tell("CHANGE SINCE PREVIOUS SCAN:");
+        tell("Total item count: " + signed(totalItems - baselineTotal)
+                + "; occupied stacks: " + signed(occupiedStacks - baselineOccupied)
+                + "; menu slots: " + signed(menuSlots - baselineMenuSlots) + ".");
+
+        Map<String, Integer> allIds = new LinkedHashMap<>(baseline);
+        current.forEach(allIds::putIfAbsent);
+        int reported = 0;
+        for (String id : allIds.keySet()) {
+            int before = baseline.getOrDefault(id, 0);
+            int after = current.getOrDefault(id, 0);
+            if (before == after) continue;
+            tell(id + ": " + before + " -> " + after + " (" + signed(after - before) + ").");
+            reported++;
+            if (reported >= 10) {
+                tell("Further item-type changes omitted.");
+                break;
+            }
+        }
+        if (reported == 0) {
+            tell("No item-type total changes detected.");
+        }
+        tell("A count change alone cannot distinguish normal use, server rollback, or duplication.");
+    }
+
+    private static String signed(int value) {
+        return value > 0 ? "+" + value : Integer.toString(value);
     }
 
     private static void tell(String message) {
