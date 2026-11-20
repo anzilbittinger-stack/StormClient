@@ -66,8 +66,8 @@ public final class BaseFinder {
     private static Candidate scan(Level level, BlockPos origin) {
         Map<Long, Candidate> byChunk = new HashMap<>();
         int radius = 48;
-        int minY = origin.getY() - 16;
-        int maxY = origin.getY() + 16;
+        int minY = Math.max(level.getMinY(), origin.getY() - 16);
+        int maxY = Math.min(level.getMaxY() - 1, origin.getY() + 16);
 
         for (int x = origin.getX() - radius; x <= origin.getX() + radius; x++) {
             for (int z = origin.getZ() - radius; z <= origin.getZ() + radius; z++) {
@@ -112,7 +112,7 @@ public final class BaseFinder {
     private static void tell(String message) {
         Minecraft client = Minecraft.getInstance();
         if (client.gui != null) {
-            client.gui.getChat().addMessage(Component.literal("[StormClient] " + message));
+            client.gui.setOverlayMessage(Component.literal("[StormClient] " + message), false);
         }
     }
 
