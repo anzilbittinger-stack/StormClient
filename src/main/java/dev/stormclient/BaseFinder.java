@@ -111,9 +111,7 @@ public final class BaseFinder {
 
     private static void tell(String message) {
         Minecraft client = Minecraft.getInstance();
-        if (client.player != null) {
-            client.player.displayClientMessage(Component.literal("[StormClient] " + message), false);
-        }
+        client.showDebugChat(Component.literal("[StormClient] " + message));
     }
 
     private static final class Candidate {
