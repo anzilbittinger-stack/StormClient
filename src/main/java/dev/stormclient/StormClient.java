@@ -20,6 +20,7 @@ public final class StormClient implements ClientModInitializer {
     public static boolean fullbrightEnabled = false;
     public static boolean autoSprintEnabled = false;
     public static boolean baseFinderEnabled = true;
+    public static boolean elytraAssistEnabled = false;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
@@ -82,6 +83,16 @@ public final class StormClient implements ClientModInitializer {
                 client.player.jumpFromGround();
             }
             jumpWasDown = jumpDown;
+
+            if (elytraAssistEnabled && client.player.isFallFlying()
+                    && client.player.input.hasForwardImpulse()
+                    && !client.options.keyShift.isDown()) {
+                float pitch = client.player.getXRot();
+                float targetPitch = -10.0f;
+                float difference = targetPitch - pitch;
+                float adjustment = Math.max(-0.6f, Math.min(0.6f, difference));
+                client.player.setXRot(pitch + adjustment);
+            }
 
             if (fullbrightEnabled) {
                 if (originalGamma < 0.0) {
