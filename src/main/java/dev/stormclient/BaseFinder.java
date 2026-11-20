@@ -111,8 +111,8 @@ public final class BaseFinder {
 
     private static void tell(String message) {
         Minecraft client = Minecraft.getInstance();
-        if (client.player != null) {
-            client.player.displayClientMessage(Component.literal("[StormClient] " + message), false);
+        if (client.gui != null) {
+            client.gui.getChat().addMessage(Component.literal("[StormClient] " + message));
         }
     }
 
