@@ -1,40 +1,83 @@
 package dev.stormclient;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public final class StormClickGuiScreen extends Screen {
+    private enum Page { MOVEMENT, VISUALS, UTILITY }
+    private final Page page;
+
     public StormClickGuiScreen() {
+        this(Page.MOVEMENT);
+    }
+
+    private StormClickGuiScreen(Page page) {
         super(Component.literal("StormClient"));
+        this.page = page;
+    }
+
+    private void open(Page next) {
+        Minecraft.getInstance().gui.setScreen(new StormClickGuiScreen(next));
     }
 
     @Override
     protected void init() {
-        int panelWidth = 340;
+        int panelWidth = 430;
         int left = (this.width - panelWidth) / 2;
-        int top = Math.max(20, (this.height - 290) / 2);
+        int top = Math.max(16, (this.height - 310) / 2);
+        int tabY = top + 43;
+        int tabWidth = 122;
 
-        this.addRenderableWidget(Button.builder(airJumpLabel(), button -> {
-            StormClient.airJumpEnabled = !StormClient.airJumpEnabled;
-            button.setMessage(airJumpLabel());
-        }).bounds(left + 22, top + 66, panelWidth - 44, 22).build());
+        addRenderableWidget(tab("MOVEMENT", Page.MOVEMENT, left + 16, tabY, tabWidth));
+        addRenderableWidget(tab("VISUALS", Page.VISUALS, left + 154, tabY, tabWidth));
+        addRenderableWidget(tab("UTILITY", Page.UTILITY, left + 292, tabY, tabWidth));
 
-        this.addRenderableWidget(Button.builder(fullbrightLabel(), button -> {
-            StormClient.fullbrightEnabled = !StormClient.fullbrightEnabled;
-            button.setMessage(fullbrightLabel());
-        }).bounds(left + 22, top + 94, panelWidth - 44, 22).build());
+        if (page == Page.MOVEMENT) {
+            addRenderableWidget(Button.builder(airJumpLabel(), button -> {
+                StormClient.airJumpEnabled = !StormClient.airJumpEnabled;
+                button.setMessage(airJumpLabel());
+            }).bounds(left + 20, top + 91, panelWidth - 40, 25).build());
 
-        this.addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C"), button -> {})
-                .bounds(left + 22, top + 122, panelWidth - 44, 22).build());
+            addRenderableWidget(Button.builder(sprintLabel(), button -> {
+                StormClient.autoSprintEnabled = !StormClient.autoSprintEnabled;
+                button.setMessage(sprintLabel());
+            }).bounds(left + 20, top + 123, panelWidth - 40, 25).build());
 
-        this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> this.onClose())
-                .bounds(left + 22, top + 246, panelWidth - 44, 20).build());
+            addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C"), button -> {})
+                    .bounds(left + 20, top + 155, panelWidth - 40, 25).build());
+        } else if (page == Page.VISUALS) {
+            addRenderableWidget(Button.builder(fullbrightLabel(), button -> {
+                StormClient.fullbrightEnabled = !StormClient.fullbrightEnabled;
+                button.setMessage(fullbrightLabel());
+            }).bounds(left + 20, top + 91, panelWidth - 40, 25).build());
+            addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C"), button -> {})
+                    .bounds(left + 20, top + 123, panelWidth - 40, 25).build());
+        } else {
+            addRenderableWidget(Button.builder(Component.literal("Base Finder: planned"), button -> {})
+                    .bounds(left + 20, top + 91, panelWidth - 40, 25).build());
+            addRenderableWidget(Button.builder(Component.literal("Waypoints: planned"), button -> {})
+                    .bounds(left + 20, top + 123, panelWidth - 40, 25).build());
+        }
+
+        addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
+                .bounds(left + 20, top + 267, panelWidth - 40, 22).build());
+    }
+
+    private Button tab(String label, Page target, int x, int y, int width) {
+        String text = (page == target ? "• " : "") + label;
+        return Button.builder(Component.literal(text), button -> open(target))
+                .bounds(x, y, width, 24).build();
     }
 
     private static Component airJumpLabel() {
         return Component.literal("Air Jump: " + (StormClient.airJumpEnabled ? "ON" : "OFF"));
+    }
+
+    private static Component sprintLabel() {
+        return Component.literal("Auto Sprint: " + (StormClient.autoSprintEnabled ? "ON" : "OFF"));
     }
 
     private static Component fullbrightLabel() {
@@ -45,19 +88,30 @@ public final class StormClickGuiScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
 
-        int panelWidth = 340;
-        int panelHeight = 290;
+        int panelWidth = 430;
+        int panelHeight = 310;
         int left = (this.width - panelWidth) / 2;
-        int top = Math.max(20, (this.height - panelHeight) / 2);
+        int top = Math.max(16, (this.height - panelHeight) / 2);
 
         graphics.fill(left - 2, top - 2, left + panelWidth + 2, top + panelHeight + 2, 0xFF168BFF);
         graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xF0101420);
         graphics.fill(left, top, left + panelWidth, top + 34, 0xFF101E38);
-        graphics.text(this.font, "STORMCLIENT", left + 14, top + 12, 0xFFFFFFFF, true);
-        graphics.text(this.font, "MOVEMENT", left + 22, top + 51, 0xFF75BFFF, true);
-        graphics.text(this.font, "VISUALS", left + 22, top + 153, 0xFF75BFFF, true);
-        graphics.text(this.font, "Zoom: hold C (release to restore FOV)", left + 22, top + 177, 0xFFB7C7DC, false);
-        graphics.text(this.font, "Mace damage boost needs a matching server mod.", left + 22, top + 204, 0xFFFFC978, false);
-        graphics.text(this.font, "Right Shift opens this menu.", left + 22, top + 224, 0xFFB7C7DC, false);
+        graphics.text(this.font, "STORMCLIENT", left + 16, top + 12, 0xFFFFFFFF, true);
+        graphics.text(this.font, "Right Shift: open/close menu", left + 265, top + 12, 0xFFB7C7DC, false);
+
+        if (page == Page.MOVEMENT) {
+            graphics.text(this.font, "MOVEMENT MODULES", left + 20, top + 78, 0xFF75BFFF, true);
+            graphics.text(this.font, "Air Jump lets you jump again while airborne.", left + 20, top + 205, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Auto Sprint sprints while you move forward.", left + 20, top + 222, 0xFFB7C7DC, false);
+        } else if (page == Page.VISUALS) {
+            graphics.text(this.font, "VISUAL MODULES", left + 20, top + 78, 0xFF75BFFF, true);
+            graphics.text(this.font, "Fullbright changes your local gamma setting.", left + 20, top + 205, 0xFFB7C7DC, false);
+            graphics.text(this.font, "Zoom is hold-to-use on the C key.", left + 20, top + 222, 0xFFB7C7DC, false);
+        } else {
+            graphics.text(this.font, "WORLD & UTILITY", left + 20, top + 78, 0xFF75BFFF, true);
+            graphics.text(this.font, "Dupe compatibility: NOT VERIFIED for PearSMP.", left + 20, top + 166, 0xFFFFC978, false);
+            graphics.text(this.font, "There is no universal client-side multiplayer dupe.", left + 20, top + 187, 0xFFB7C7DC, false);
+            graphics.text(this.font, "We won't show a fake button as a working exploit.", left + 20, top + 208, 0xFFB7C7DC, false);
+        }
     }
 }
