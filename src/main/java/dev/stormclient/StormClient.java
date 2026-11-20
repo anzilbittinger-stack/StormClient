@@ -15,12 +15,17 @@ public final class StormClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static boolean airJumpEnabled = true;
+    public static boolean fullbrightEnabled = false;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
     );
     private static KeyMapping openGuiKey;
+    private static KeyMapping zoomKey;
     private static boolean jumpWasDown;
+    private static boolean zooming;
+    private static int originalFov = -1;
+    private static double originalGamma = -1.0;
 
     @Override
     public void onInitializeClient() {
@@ -28,6 +33,12 @@ public final class StormClient implements ClientModInitializer {
                 "key.stormclient.open_gui",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_RIGHT_SHIFT,
+                CATEGORY
+        ));
+        zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.stormclient.zoom",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_C,
                 CATEGORY
         ));
 
@@ -38,6 +49,11 @@ public final class StormClient implements ClientModInitializer {
 
             if (client.player == null || client.level == null) {
                 jumpWasDown = false;
+                if (zooming) {
+                    client.options.fov().set(originalFov);
+                    zooming = false;
+                    originalFov = -1;
+                }
                 return;
             }
 
@@ -49,8 +65,30 @@ public final class StormClient implements ClientModInitializer {
                 client.player.jumpFromGround();
             }
             jumpWasDown = jumpDown;
+
+            if (fullbrightEnabled) {
+                if (originalGamma < 0.0) {
+                    originalGamma = client.options.gamma().get();
+                }
+                client.options.gamma().set(16.0);
+            } else if (originalGamma >= 0.0) {
+                client.options.gamma().set(originalGamma);
+                originalGamma = -1.0;
+            }
+
+            if (zoomKey.isDown()) {
+                if (!zooming) {
+                    originalFov = client.options.fov().get();
+                    zooming = true;
+                }
+                client.options.fov().set(30);
+            } else if (zooming) {
+                client.options.fov().set(originalFov);
+                zooming = false;
+                originalFov = -1;
+            }
         });
 
-        LOGGER.info("StormClient initialised. Right Shift opens the ClickGUI.");
+        LOGGER.info("StormClient initialised. Right Shift opens ClickGUI; C zooms.");
     }
 }
