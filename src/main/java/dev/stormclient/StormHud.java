@@ -70,6 +70,46 @@ public final class StormHud {
                     "HP: %.1f/%.1f | Food: %d/20", health, maxHealth, food), x, y);
             y += line;
         }
+        if (StormClient.hudPingEnabled && client.getConnection() != null) {
+            var playerInfo = client.getConnection().getPlayerInfo(client.player.getUUID());
+            if (playerInfo != null) {
+                draw(graphics, "Ping: " + playerInfo.getLatency() + " ms", x, y);
+                y += line;
+            }
+        }
+        if (StormClient.hudWorldTimeEnabled) {
+            long ticks = Math.floorMod(client.level.getDayTime(), 24000L);
+            int hours = (int) ((ticks / 1000L + 6L) % 24L);
+            int minutes = (int) ((ticks % 1000L) * 60L / 1000L);
+            draw(graphics, String.format(java.util.Locale.ROOT, "World time: %02d:%02d", hours, minutes), x, y);
+            y += line;
+        }
+        if (StormClient.hudHeldDurabilityEnabled) {
+            var held = client.player.getMainHandItem();
+            if (!held.isEmpty() && held.getMaxDamage() > 0) {
+                int remaining = held.getMaxDamage() - held.getDamageValue();
+                draw(graphics, "Held durability: " + remaining + "/" + held.getMaxDamage(), x, y);
+                y += line;
+            }
+        }
+        if (StormClient.hudArmorDurabilityEnabled) {
+            StringBuilder armorState = new StringBuilder("Armor durability: ");
+            boolean found = false;
+            for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+                var stack = client.player.getItemBySlot(slot);
+                if (!stack.isEmpty() && stack.getMaxDamage() > 0) {
+                    if (found) armorState.append(" | ");
+                    armorState.append(slot.getName()).append(" ")
+                            .append(stack.getMaxDamage() - stack.getDamageValue())
+                            .append("/").append(stack.getMaxDamage());
+                    found = true;
+                }
+            }
+            if (found) {
+                draw(graphics, armorState.toString(), x, y);
+                y += line;
+            }
+        }
         if (StormClient.hudMaceEnabled) {
             String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM
                     .getKey(client.player.getMainHandItem().getItem()).getPath();
