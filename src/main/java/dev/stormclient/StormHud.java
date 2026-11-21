@@ -62,6 +62,14 @@ public final class StormHud {
             draw(graphics, modules.equals("Modules: ") ? "Modules: none" : modules, x, y);
             y += line;
         }
+        if (StormClient.hudVitalsEnabled) {
+            float health = client.player.getHealth();
+            float maxHealth = client.player.getMaxHealth();
+            int food = client.player.getFoodData().getFoodLevel();
+            draw(graphics, String.format(java.util.Locale.ROOT,
+                    "HP: %.1f/%.1f | Food: %d/20", health, maxHealth, food), x, y);
+            y += line;
+        }
         if (StormClient.hudMaceEnabled) {
             String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM
                     .getKey(client.player.getMainHandItem().getItem()).getPath();
