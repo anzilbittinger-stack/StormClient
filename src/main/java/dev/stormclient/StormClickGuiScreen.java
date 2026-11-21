@@ -25,7 +25,7 @@ public final class StormClickGuiScreen extends Screen {
     @Override
     protected void init() {
         int panelWidth = 470;
-        int panelHeight = 330;
+        int panelHeight = 360;
         int left = (this.width - panelWidth) / 2;
         int top = Math.max(12, (this.height - panelHeight) / 2);
         int tabY = top + 42;
@@ -53,6 +53,7 @@ public final class StormClickGuiScreen extends Screen {
             toggle(left, y + 102, buttonWidth, heldItemLabel(), () -> StormClient.hudHeldItemEnabled = !StormClient.hudHeldItemEnabled, 7);
             toggle(left, y + 136, buttonWidth, armorLabel(), () -> StormClient.hudArmorEnabled = !StormClient.hudArmorEnabled, 8);
             toggle(left, y + 170, buttonWidth, modulesLabel(), () -> StormClient.hudActiveModulesEnabled = !StormClient.hudActiveModulesEnabled, 9);
+            toggle(left, y + 204, buttonWidth, maceLabel(), () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled, 11);
         } else if (page == Page.UTILITY) {
             toggle(left, y, buttonWidth, baseFinderLabel(), () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled, 10);
             addRenderableWidget(Button.builder(Component.literal("Scan nearby loaded chunks: type #base"), button -> {
@@ -67,7 +68,7 @@ public final class StormClickGuiScreen extends Screen {
         }
 
         addRenderableWidget(Button.builder(Component.literal("CLOSE  [ESC]"), button -> onClose())
-                .bounds(left + 20, top + 291, buttonWidth, 23).build());
+                .bounds(left + 20, top + 321, buttonWidth, 23).build());
     }
 
     private void toggle(int left, int y, int width, Component label, Runnable change, int id) {
@@ -90,6 +91,7 @@ public final class StormClickGuiScreen extends Screen {
             case 8 -> armorLabel();
             case 9 -> modulesLabel();
             case 10 -> baseFinderLabel();
+            case 11 -> maceLabel();
             default -> Component.literal("Unknown");
         };
     }
@@ -113,13 +115,14 @@ public final class StormClickGuiScreen extends Screen {
     private static Component heldItemLabel() { return state("Held Item HUD", StormClient.hudHeldItemEnabled); }
     private static Component armorLabel() { return state("Armor HUD", StormClient.hudArmorEnabled); }
     private static Component modulesLabel() { return state("Active Modules HUD", StormClient.hudActiveModulesEnabled); }
+    private static Component maceLabel() { return state("Mace PvP HUD (display only)", StormClient.hudMaceEnabled); }
     private static Component baseFinderLabel() { return state("Base Finder", StormClient.baseFinderEnabled); }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
         int panelWidth = 470;
-        int panelHeight = 330;
+        int panelHeight = 360;
         int left = (this.width - panelWidth) / 2;
         int top = Math.max(12, (this.height - panelHeight) / 2);
 
@@ -146,7 +149,7 @@ public final class StormClickGuiScreen extends Screen {
             graphics.text(this.font, "Fullbright changes your local gamma setting.", left + 20, top + 174, 0xFFB5C2D4, false);
             graphics.text(this.font, "Hold C to zoom; release C to restore your FOV.", left + 20, top + 191, 0xFFB5C2D4, false);
         } else if (page == Page.HUD) {
-            graphics.text(this.font, "Choose which information appears in the top-left HUD.", left + 20, top + 278, 0xFFB5C2D4, false);
+            graphics.text(this.font, "Mace HUD is display-only; it never changes attacks or aim.", left + 20, top + 288, 0xFFB5C2D4, false);
         } else if (page == Page.UTILITY) {
             graphics.text(this.font, "Base Finder is heuristic and checks loaded chunks only.", left + 20, top + 178, 0xFFB5C2D4, false);
             graphics.text(this.font, "It does not reveal unloaded areas or hidden players.", left + 20, top + 195, 0xFFB5C2D4, false);
@@ -154,6 +157,6 @@ public final class StormClickGuiScreen extends Screen {
             graphics.text(this.font, "Read-only inventory and bundle diagnostics.", left + 20, top + 156, 0xFFB5C2D4, false);
             graphics.text(this.font, "No packets, slot edits, duplication, or disconnect tricks.", left + 20, top + 175, 0xFFFFC978, false);
         }
-        graphics.text(this.font, "Right Shift: menu  |  C: zoom", left + 20, top + 315, 0xFF7F91A8, false);
+        graphics.text(this.font, "Right Shift: menu  |  C: zoom", left + 20, top + 345, 0xFF7F91A8, false);
     }
 }
