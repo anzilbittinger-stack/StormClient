@@ -141,6 +141,11 @@ public final class StormHud {
                 if (++shown >= 5) break;
             }
         }
+        String baseNavigation = BaseFinder.getNavigationText(client);
+        if (baseNavigation != null) {
+            draw(graphics, baseNavigation, x, y);
+            y += line;
+        }
         if (StormClient.hudMaceEnabled) {
             String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM
                     .getKey(client.player.getMainHandItem().getItem()).getPath();
