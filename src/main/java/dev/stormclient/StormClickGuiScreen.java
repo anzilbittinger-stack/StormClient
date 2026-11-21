@@ -1,224 +1,285 @@
 package dev.stormclient;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.function.BooleanSupplier;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Compact category-sidebar ClickGUI for StormClient modules. */
+/**
+ * Independently implemented Astran-inspired StormClient menu.
+ * Search, category filtering, module toggles and presets are handled locally.
+ */
 public final class StormClickGuiScreen extends Screen {
-    private enum Page { COMBAT, MOVEMENT, VISUALS, PLAYER, WORLD, HUD, UTILITY }
-    private final Page page;
+    private enum Tab { MODULES, COMBOS, HUD }
+    private enum Category { COMBAT, MOVEMENT, VISUALS, PLAYER, WORLD, UTILITY }
 
-    public StormClickGuiScreen() { this(Page.MOVEMENT); }
+    private Tab tab = Tab.MODULES;
+    private Category category = Category.MOVEMENT;
+    private String search = "";
+    private int scroll;
+    private static final int PANEL_W = 520;
+    private static final int PANEL_H = 370;
+    private static final int ROW_H = 31;
 
-    private StormClickGuiScreen(Page page) {
+    public StormClickGuiScreen() {
         super(Component.literal("StormClient"));
-        this.page = page;
     }
 
-    private void open(Page next) {
-        Minecraft.getInstance().gui.setScreen(new StormClickGuiScreen(next));
+    private int left() { return (width - PANEL_W) / 2; }
+    private int top() { return Math.max(6, (height - PANEL_H) / 2); }
+
+    private record ModuleEntry(String name, String description,
+                               BooleanSupplier enabled, Runnable toggle) {}
+
+    private static ModuleEntry entry(String name, String description,
+                                     BooleanSupplier enabled, Runnable toggle) {
+        return new ModuleEntry(name, description, enabled, toggle);
+    }
+
+    private List<ModuleEntry> modules() {
+        List<ModuleEntry> all = new ArrayList<>();
+        switch (category) {
+            case COMBAT -> all.add(entry("Mace PvP HUD", "Display-only mace state and vertical speed",
+                    () -> StormClient.hudMaceEnabled, () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled));
+            case MOVEMENT -> {
+                all.add(entry("Air Jump", "Client-side extra jump input", () -> StormClient.airJumpEnabled,
+                        () -> StormClient.airJumpEnabled = !StormClient.airJumpEnabled));
+                all.add(entry("Auto Sprint", "Sprint while moving forward", () -> StormClient.autoSprintEnabled,
+                        () -> StormClient.autoSprintEnabled = !StormClient.autoSprintEnabled));
+                all.add(entry("Elytra Assist", "Gently adjusts pitch while gliding", () -> StormClient.elytraAssistEnabled,
+                        () -> StormClient.elytraAssistEnabled = !StormClient.elytraAssistEnabled));
+            }
+            case VISUALS -> {
+                all.add(entry("Fullbright", "Raises local client gamma", () -> StormClient.fullbrightEnabled,
+                        () -> StormClient.fullbrightEnabled = !StormClient.fullbrightEnabled));
+                all.add(entry("Visible Player Indicators", "Lists nearby players in line of sight only",
+                        () -> StormClient.visiblePlayersEnabled, () -> StormClient.visiblePlayersEnabled = !StormClient.visiblePlayersEnabled));
+                all.add(entry("Visible Mob Indicators", "Lists nearby mobs in line of sight only",
+                        () -> StormClient.visibleMobsEnabled, () -> StormClient.visibleMobsEnabled = !StormClient.visibleMobsEnabled));
+                all.add(entry("Zoom", "Hold C to zoom; keybind is currently fixed",
+                        () -> false, () -> {}));
+            }
+            case PLAYER -> {
+                all.add(entry("Auto Totem", "Moves a carried totem into an empty offhand",
+                        () -> StormClient.autoTotemEnabled, () -> StormClient.autoTotemEnabled = !StormClient.autoTotemEnabled));
+                all.add(entry("Totem Alert", "Shows the number of carried totems",
+                        () -> StormClient.totemAlertEnabled, () -> StormClient.totemAlertEnabled = !StormClient.totemAlertEnabled));
+            }
+            case WORLD -> all.add(entry("Base Finder", "Heuristic scan of already-loaded chunks only",
+                    () -> StormClient.baseFinderEnabled, () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled));
+            case UTILITY -> {
+                all.add(entry("Base Finder", "Heuristic scan of already-loaded chunks only",
+                        () -> StormClient.baseFinderEnabled, () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled));
+            }
+        }
+        if (!search.isBlank()) {
+            String query = search.toLowerCase(Locale.ROOT);
+            all.removeIf(module -> !module.name().toLowerCase(Locale.ROOT).contains(query)
+                    && !module.description().toLowerCase(Locale.ROOT).contains(query));
+        }
+        return all;
+    }
+
+    private List<ModuleEntry> hudModules() {
+        List<ModuleEntry> all = new ArrayList<>();
+        all.add(entry("FPS Counter", "Displays current client FPS", () -> StormClient.hudFpsEnabled, () -> StormClient.hudFpsEnabled = !StormClient.hudFpsEnabled));
+        all.add(entry("Coordinates", "Displays block coordinates", () -> StormClient.hudCoordinatesEnabled, () -> StormClient.hudCoordinatesEnabled = !StormClient.hudCoordinatesEnabled));
+        all.add(entry("Direction", "Displays facing direction", () -> StormClient.hudDirectionEnabled, () -> StormClient.hudDirectionEnabled = !StormClient.hudDirectionEnabled));
+        all.add(entry("Held Item", "Displays main-hand item name", () -> StormClient.hudHeldItemEnabled, () -> StormClient.hudHeldItemEnabled = !StormClient.hudHeldItemEnabled));
+        all.add(entry("Armor", "Displays equipped armor piece count", () -> StormClient.hudArmorEnabled, () -> StormClient.hudArmorEnabled = !StormClient.hudArmorEnabled));
+        all.add(entry("Active Modules", "Displays enabled movement and visual modules", () -> StormClient.hudActiveModulesEnabled, () -> StormClient.hudActiveModulesEnabled = !StormClient.hudActiveModulesEnabled));
+        all.add(entry("Mace HUD", "Displays grounded/falling/airborne state", () -> StormClient.hudMaceEnabled, () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled));
+        all.add(entry("Health + Hunger", "Displays current health and food level", () -> StormClient.hudVitalsEnabled, () -> StormClient.hudVitalsEnabled = !StormClient.hudVitalsEnabled));
+        all.add(entry("Ping", "Displays server latency when available", () -> StormClient.hudPingEnabled, () -> StormClient.hudPingEnabled = !StormClient.hudPingEnabled));
+        all.add(entry("Held Item Durability", "Displays main-hand durability", () -> StormClient.hudHeldDurabilityEnabled, () -> StormClient.hudHeldDurabilityEnabled = !StormClient.hudHeldDurabilityEnabled));
+        all.add(entry("Armor Durability", "Displays equipped armor durability", () -> StormClient.hudArmorDurabilityEnabled, () -> StormClient.hudArmorDurabilityEnabled = !StormClient.hudArmorDurabilityEnabled));
+        if (!search.isBlank()) {
+            String query = search.toLowerCase(Locale.ROOT);
+            all.removeIf(module -> !module.name().toLowerCase(Locale.ROOT).contains(query)
+                    && !module.description().toLowerCase(Locale.ROOT).contains(query));
+        }
+        return all;
+    }
+
+    private void applyPreset(int preset) {
+        // Presets only configure existing, safe client-side options.
+        if (preset == 0) { // Minimal HUD
+            StormClient.hudFpsEnabled = true;
+            StormClient.hudCoordinatesEnabled = true;
+            StormClient.hudDirectionEnabled = false;
+            StormClient.hudHeldItemEnabled = false;
+            StormClient.hudArmorEnabled = false;
+            StormClient.hudActiveModulesEnabled = false;
+            StormClient.hudMaceEnabled = false;
+            StormClient.hudVitalsEnabled = false;
+            StormClient.hudPingEnabled = false;
+            StormClient.hudHeldDurabilityEnabled = false;
+            StormClient.hudArmorDurabilityEnabled = false;
+        } else if (preset == 1) { // Mace practice display
+            StormClient.hudMaceEnabled = true;
+            StormClient.hudVitalsEnabled = true;
+            StormClient.hudCoordinatesEnabled = true;
+            StormClient.hudHeldDurabilityEnabled = true;
+        } else if (preset == 2) { // Exploration
+            StormClient.hudCoordinatesEnabled = true;
+            StormClient.hudDirectionEnabled = true;
+            StormClient.hudFpsEnabled = true;
+            StormClient.visiblePlayersEnabled = true;
+            StormClient.visibleMobsEnabled = true;
+            StormClient.baseFinderEnabled = true;
+        }
     }
 
     @Override
-    protected void init() {
-        int panelWidth = 470;
-        int panelHeight = 340;
-        int left = (this.width - panelWidth) / 2;
-        int top = Math.max(8, (this.height - panelHeight) / 2);
-        int navX = left + 10;
-        int navY = top + 48;
-        int contentX = left + 126;
-        int contentWidth = panelWidth - 144;
-        int y = top + 82;
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(g, mouseX, mouseY, delta);
+        int x = left(), y = top();
+        g.fill(x - 2, y - 2, x + PANEL_W + 2, y + PANEL_H + 2, 0xFF3A8DFF);
+        g.fill(x, y, x + PANEL_W, y + PANEL_H, 0xF00B101A);
+        g.fill(x, y, x + PANEL_W, y + 39, 0xFF151F30);
+        g.fill(x, y + 39, x + PANEL_W, y + 41, 0xFF3A8DFF);
+        g.fill(x + 137, y + 42, x + 139, y + PANEL_H - 12, 0xFF26364B);
+        g.fill(x + 8, y + 47, x + 130, y + 295, 0x66151F30);
+        g.text(font, "STORMCLIENT", x + 16, y + 14, 0xFFFFFFFF, true);
+        g.text(font, "FABRIC  /  26.2", x + PANEL_W - 112, y + 14, 0xFF91A9C7, false);
 
-        addRenderableWidget(tab("COMBAT", Page.COMBAT, navX, navY));
-        addRenderableWidget(tab("MOVEMENT", Page.MOVEMENT, navX, navY + 29));
-        addRenderableWidget(tab("VISUALS", Page.VISUALS, navX, navY + 58));
-        addRenderableWidget(tab("PLAYER", Page.PLAYER, navX, navY + 87));
-        addRenderableWidget(tab("WORLD", Page.WORLD, navX, navY + 116));
-        addRenderableWidget(tab("HUD", Page.HUD, navX, navY + 145));
-        addRenderableWidget(tab("UTILITY", Page.UTILITY, navX, navY + 174));
+        drawTab(g, "MODULES", Tab.MODULES, x + 12, y + 45, mouseX, mouseY);
+        drawTab(g, "COMBOS", Tab.COMBOS, x + 12, y + 70, mouseX, mouseY);
+        drawTab(g, "HUD", Tab.HUD, x + 12, y + 95, mouseX, mouseY);
 
-        int buttonWidth = contentWidth;
-        int buttonLeft = contentX - 20;
-        if (page == Page.MOVEMENT) {
-            toggle(buttonLeft, y, buttonWidth, airJumpLabel(), () -> StormClient.airJumpEnabled = !StormClient.airJumpEnabled, 0);
-            toggle(buttonLeft, y + 34, buttonWidth, sprintLabel(), () -> StormClient.autoSprintEnabled = !StormClient.autoSprintEnabled, 1);
-            toggle(buttonLeft, y + 68, buttonWidth, elytraLabel(), () -> StormClient.elytraAssistEnabled = !StormClient.elytraAssistEnabled, 2);
-        } else if (page == Page.VISUALS) {
-            toggle(buttonLeft, y, buttonWidth, fullbrightLabel(), () -> StormClient.fullbrightEnabled = !StormClient.fullbrightEnabled, 3);
-            toggle(buttonLeft, y + 29, buttonWidth, visiblePlayersLabel(), () -> StormClient.visiblePlayersEnabled = !StormClient.visiblePlayersEnabled, 17);
-            toggle(buttonLeft, y + 58, buttonWidth, visibleMobsLabel(), () -> StormClient.visibleMobsEnabled = !StormClient.visibleMobsEnabled, 18);
-            addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C  [KEYBIND]"), button -> {})
-                     .bounds(contentX, y + 87, buttonWidth, 24).build());
-        } else if (page == Page.HUD) {
-            toggle(buttonLeft, y, buttonWidth, fpsLabel(), () -> StormClient.hudFpsEnabled = !StormClient.hudFpsEnabled, 4);
-            toggle(buttonLeft, y + 26, buttonWidth, coordinatesLabel(), () -> StormClient.hudCoordinatesEnabled = !StormClient.hudCoordinatesEnabled, 5);
-            toggle(buttonLeft, y + 52, buttonWidth, directionLabel(), () -> StormClient.hudDirectionEnabled = !StormClient.hudDirectionEnabled, 6);
-            toggle(buttonLeft, y + 78, buttonWidth, heldItemLabel(), () -> StormClient.hudHeldItemEnabled = !StormClient.hudHeldItemEnabled, 7);
-            toggle(buttonLeft, y + 104, buttonWidth, armorLabel(), () -> StormClient.hudArmorEnabled = !StormClient.hudArmorEnabled, 8);
-            toggle(buttonLeft, y + 130, buttonWidth, modulesLabel(), () -> StormClient.hudActiveModulesEnabled = !StormClient.hudActiveModulesEnabled, 9);
-            toggle(buttonLeft, y + 156, buttonWidth, maceLabel(), () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled, 11);
-            toggleCompact(buttonLeft, y, buttonWidth, fpsLabel(), () -> StormClient.hudFpsEnabled = !StormClient.hudFpsEnabled, 4, 0);
-            toggleCompact(buttonLeft, y + 20, buttonWidth, coordinatesLabel(), () -> StormClient.hudCoordinatesEnabled = !StormClient.hudCoordinatesEnabled, 5, 1);
-            toggleCompact(buttonLeft, y + 40, buttonWidth, directionLabel(), () -> StormClient.hudDirectionEnabled = !StormClient.hudDirectionEnabled, 6, 2);
-            toggleCompact(buttonLeft, y + 60, buttonWidth, heldItemLabel(), () -> StormClient.hudHeldItemEnabled = !StormClient.hudHeldItemEnabled, 7, 3);
-            toggleCompact(buttonLeft, y + 80, buttonWidth, armorLabel(), () -> StormClient.hudArmorEnabled = !StormClient.hudArmorEnabled, 8, 4);
-            toggleCompact(buttonLeft, y + 100, buttonWidth, modulesLabel(), () -> StormClient.hudActiveModulesEnabled = !StormClient.hudActiveModulesEnabled, 9, 5);
-            toggleCompact(buttonLeft, y + 120, buttonWidth, maceLabel(), () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled, 11, 6);
-            toggleCompact(buttonLeft, y + 140, buttonWidth, vitalsLabel(), () -> StormClient.hudVitalsEnabled = !StormClient.hudVitalsEnabled, 12, 7);
-            toggleCompact(buttonLeft, y + 160, buttonWidth, pingLabel(), () -> StormClient.hudPingEnabled = !StormClient.hudPingEnabled, 13, 8);
-            toggleCompact(buttonLeft, y + 180, buttonWidth, heldDurabilityLabel(), () -> StormClient.hudHeldDurabilityEnabled = !StormClient.hudHeldDurabilityEnabled, 15, 9);
-            toggleCompact(buttonLeft, y + 200, buttonWidth, armorDurabilityLabel(), () -> StormClient.hudArmorDurabilityEnabled = !StormClient.hudArmorDurabilityEnabled, 16, 10);
-        } else if (page == Page.UTILITY) {
-            toggle(buttonLeft, y, buttonWidth, baseFinderLabel(), () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled, 10);
-            addRenderableWidget(Button.builder(Component.literal("Scan nearby loaded chunks  (#base)"), button -> {
-                Minecraft.getInstance().gui.setScreen(null);
-                if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.connection.sendChat("#base");
-            }).bounds(contentX, y + 34, buttonWidth, 27).build());
-            addRenderableWidget(Button.builder(Component.literal("List markers  (#base list)"), button -> {
-                Minecraft.getInstance().gui.setScreen(null);
-                if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.connection.sendChat("#base list");
-            }) .bounds(contentX, y + 58, buttonWidth, 24).build());
-            addRenderableWidget(Button.builder(Component.literal("Clear markers  (#base clear)"), button -> {
-                Minecraft.getInstance().gui.setScreen(null);
-                if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.connection.sendChat("#base clear");
-            }) .bounds(contentX, y + 87, buttonWidth, 24).build());
-        } else if (page == Page.PLAYER) {
-            toggle(buttonLeft, y, buttonWidth, autoTotemLabel(), () -> StormClient.autoTotemEnabled = !StormClient.autoTotemEnabled, 20);
-            toggle(buttonLeft, y + 34, buttonWidth, totemAlertLabel(), () -> StormClient.totemAlertEnabled = !StormClient.totemAlertEnabled, 19);
-            addRenderableWidget(Button.builder(Component.literal("Inventory + Bundle Inspector"), button ->
-                    BundleInspector.inspect()).bounds(contentX, y + 68, buttonWidth, 27).build());
-        } else if (page == Page.COMBAT) {
-            addRenderableWidget(Button.builder(Component.literal("Mace PvP HUD  →  configure in HUD"), button ->
-                    open(Page.HUD)).bounds(contentX, y, buttonWidth, 27).build());
-        } else if (page == Page.WORLD) {
-            // World tools will be added here when implemented.
+        g.text(font, "CATEGORIES", x + 18, y + 132, 0xFF7289A6, true);
+        int cy = y + 149;
+        for (Category c : Category.values()) {
+            boolean selected = category == c;
+            int color = selected ? 0xFF72B8FF : 0xFFB5C2D4;
+            if (selected) g.fill(x + 12, cy - 3, x + 126, cy + 17, 0x553A8DFF);
+            g.text(font, (selected ? "› " : "  ") + c.name(), x + 19, cy + 2, color, selected);
+            cy += 23;
         }
 
-        addRenderableWidget(Button.builder(Component.literal("CLOSE  [ESC]"), button -> onClose())
-                 .bounds(contentX, top + 304, buttonWidth, 22).build());
+        int contentX = x + 153;
+        g.text(font, tab == Tab.MODULES ? category.name() : tab.name(), contentX, y + 51, 0xFF72B8FF, true);
+        g.text(font, "Search: " + (search.isEmpty() ? "type to filter..." : search + "_"),
+                contentX, y + 69, 0xFFB5C2D4, false);
+        g.fill(contentX, y + 85, x + PANEL_W - 14, y + 86, 0xFF26364B);
+
+        if (tab == Tab.MODULES || tab == Tab.HUD) {
+            List<ModuleEntry> list = tab == Tab.HUD ? hudModules() : modules();
+            int startY = y + 96;
+            int visible = 8;
+            int maxScroll = Math.max(0, list.size() - visible);
+            scroll = Math.max(0, Math.min(scroll, maxScroll));
+            if (list.isEmpty()) {
+                g.text(font, "No matching implemented modules.", contentX, startY + 8, 0xFFB5C2D4, false);
+            }
+            for (int i = scroll; i < Math.min(list.size(), scroll + visible); i++) {
+                ModuleEntry m = list.get(i);
+                int rowY = startY + (i - scroll) * ROW_H;
+                g.fill(contentX, rowY, x + PANEL_W - 14, rowY + 27, 0x88303E52);
+                g.text(font, m.name(), contentX + 8, rowY + 4, 0xFFF2F5FA, true);
+                g.text(font, m.description(), contentX + 8, rowY + 16, 0xFF91A9C7, false);
+                boolean on = m.enabled().getAsBoolean();
+                g.fill(x + PANEL_W - 67, rowY + 6, x + PANEL_W - 23, rowY + 21,
+                        on ? 0xFF267D55 : 0xFF465367);
+                g.text(font, on ? "ON" : (m.name().equals("Zoom") ? "HOLD C" : "OFF"),
+                        x + PANEL_W - 60, rowY + 10, 0xFFFFFFFF, true);
+            }
+            g.text(font, "Click a row to toggle  |  Scroll to see more",
+                    contentX, y + 350, 0xFF7F91A8, false);
+        } else {
+            g.text(font, "QUICK PRESETS", contentX, y + 103, 0xFFB5C2D4, true);
+            String[] names = {"Minimal HUD", "Mace Practice Display", "Exploration"};
+            String[] descriptions = {
+                    "A clean FPS + coordinates layout",
+                    "Mace state, health and durability info",
+                    "Coordinates, direction and visible entities"
+            };
+            for (int i = 0; i < names.length; i++) {
+                int py = y + 126 + i * 58;
+                g.fill(contentX, py, x + PANEL_W - 14, py + 48, 0x88303E52);
+                g.text(font, names[i], contentX + 9, py + 8, 0xFFF2F5FA, true);
+                g.text(font, descriptions[i], contentX + 9, py + 23, 0xFF91A9C7, false);
+                g.text(font, "APPLY  →", x + PANEL_W - 76, py + 18, 0xFF72B8FF, true);
+            }
+            g.text(font, "Presets change only existing StormClient settings.",
+                    contentX, y + 320, 0xFF7F91A8, false);
+        }
+
+        g.text(font, "RIGHT SHIFT: menu     C: zoom     ESC: close",
+                x + 16, y + PANEL_H - 17, 0xFF7F91A8, false);
     }
 
-    private void toggleCompact(int left, int y, int width, Component label, Runnable change, int id, int row) {
-        addRenderableWidget(Button.builder(label, button -> {
-            change.run();
-            button.setMessage(labelFor(id));
-        }).bounds(left + 20, y, width, 18).build());
+    private void drawTab(GuiGraphicsExtractor g, String label, Tab target, int x, int y, int mx, int my) {
+        boolean selected = tab == target;
+        g.fill(x, y, x + 112, y + 21, selected ? 0x663A8DFF : 0x442B3B50);
+        g.text(font, (selected ? "◆ " : "  ") + label, x + 7, y + 7,
+                selected ? 0xFF72B8FF : 0xFFB5C2D4, selected);
     }
-
-    private void toggle(int left, int y, int width, Component label, Runnable change, int id) {
-        addRenderableWidget(Button.builder(label, button -> {
-            change.run();
-            button.setMessage(labelFor(id));
-        }).bounds(left + 20, y, width, 27).build());
-    }
-
-    private static Component labelFor(int id) {
-        return switch (id) {
-            case 0 -> airJumpLabel();
-            case 1 -> sprintLabel();
-            case 2 -> elytraLabel();
-            case 3 -> fullbrightLabel();
-            case 4 -> fpsLabel();
-            case 5 -> coordinatesLabel();
-            case 6 -> directionLabel();
-            case 7 -> heldItemLabel();
-            case 8 -> armorLabel();
-            case 9 -> modulesLabel();
-            case 10 -> baseFinderLabel();
-            case 11 -> maceLabel();
-            case 12 -> vitalsLabel();
-            case 13 -> pingLabel();
-            case 15 -> heldDurabilityLabel();
-            case 16 -> armorDurabilityLabel();
-            case 17 -> visiblePlayersLabel();
-            case 18 -> visibleMobsLabel();
-            case 19 -> totemAlertLabel();
-            case 20 -> autoTotemLabel();
-            default -> Component.literal("Unknown");
-        };
-    }
-
-    private Button tab(String label, Page target, int x, int y) {
-        String text = (page == target ? "◆ " : "   ") + label;
-        return Button.builder(Component.literal(text), button -> open(target))
-                .bounds(x, y, 122, 27).build();
-    }
-
-    private static Component state(String name, boolean enabled) {
-        return Component.literal(name + "     " + (enabled ? "[ON]" : "[OFF]"));
-    }
-    private static Component airJumpLabel() { return state("Air Jump", StormClient.airJumpEnabled); }
-    private static Component sprintLabel() { return state("Auto Sprint", StormClient.autoSprintEnabled); }
-    private static Component elytraLabel() { return state("Elytra Assist", StormClient.elytraAssistEnabled); }
-    private static Component fullbrightLabel() { return state("Fullbright", StormClient.fullbrightEnabled); }
-    private static Component fpsLabel() { return state("FPS Counter", StormClient.hudFpsEnabled); }
-    private static Component coordinatesLabel() { return state("Coordinates HUD", StormClient.hudCoordinatesEnabled); }
-    private static Component directionLabel() { return state("Direction HUD", StormClient.hudDirectionEnabled); }
-    private static Component heldItemLabel() { return state("Held Item HUD", StormClient.hudHeldItemEnabled); }
-    private static Component armorLabel() { return state("Armor HUD", StormClient.hudArmorEnabled); }
-    private static Component modulesLabel() { return state("Active Modules HUD", StormClient.hudActiveModulesEnabled); }
-    private static Component maceLabel() { return state("Mace PvP HUD (display only)", StormClient.hudMaceEnabled); }
-    private static Component vitalsLabel() { return state("Health + Hunger HUD", StormClient.hudVitalsEnabled); }
-    private static Component pingLabel() { return state("Ping HUD", StormClient.hudPingEnabled); }
-    private static Component heldDurabilityLabel() { return state("Held Item Durability HUD", StormClient.hudHeldDurabilityEnabled); }
-    private static Component armorDurabilityLabel() { return state("Armor Durability HUD", StormClient.hudArmorDurabilityEnabled); }
-    private static Component visiblePlayersLabel() { return state("Visible Player Indicators", StormClient.visiblePlayersEnabled); }
-    private static Component visibleMobsLabel() { return state("Visible Mob Indicators", StormClient.visibleMobsEnabled); }
-    private static Component totemAlertLabel() { return state("Totem Alert", StormClient.totemAlertEnabled); }
-    private static Component autoTotemLabel() { return state("Auto Totem (empty offhand only)", StormClient.autoTotemEnabled); }
-    private static Component baseFinderLabel() { return state("Base Finder", StormClient.baseFinderEnabled); }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
-        int panelWidth = 470;
-        int panelHeight = 340;
-        int left = (this.width - panelWidth) / 2;
-        int top = Math.max(8, (this.height - panelHeight) / 2);
-        int contentX = left + 126;
-
-        graphics.fill(left - 2, top - 2, left + panelWidth + 2, top + panelHeight + 2, 0xFF3A8DFF);
-        graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xF00B101A);
-        graphics.fill(left, top, left + panelWidth, top + 34, 0xFF151F30);
-        graphics.fill(left, top + 34, left + panelWidth, top + 36, 0xFF3A8DFF);
-        graphics.fill(left + 116, top + 36, left + 118, top + panelHeight - 10, 0xFF26364B);
-        graphics.fill(left + 8, top + 42, left + 110, top + 270, 0x66151F30);
-        graphics.text(this.font, "STORMCLIENT", left + 16, top + 12, 0xFFFFFFFF, true);
-        graphics.text(this.font, "MODULE MENU  /  26.2", left + 320, top + 12, 0xFF91A9C7, false);
-
-        String heading = switch (page) {
-            case COMBAT -> "COMBAT";
-            case MOVEMENT -> "MOVEMENT";
-            case VISUALS -> "VISUALS";
-            case PLAYER -> "PLAYER";
-            case WORLD -> "WORLD";
-            case HUD -> "HUD EDITOR";
-            case UTILITY -> "UTILITY";
-        };
-        graphics.text(this.font, heading, contentX, top + 65, 0xFF72B8FF, true);
-        graphics.text(this.font, "Each module has its own independent switch.", contentX, top + 78, 0xFF91A9C7, false);
-
-        if (page == Page.COMBAT) {
-            graphics.text(this.font, "PvP settings stay separate from movement and HUD.", contentX, top + 174, 0xFFB5C2D4, false);
-            graphics.text(this.font, "No combat automation is enabled by this menu.", contentX, top + 191, 0xFFB5C2D4, false);
-        } else if (page == Page.MOVEMENT) {
-            graphics.text(this.font, "Client-side movement helpers; server rules apply.", contentX, top + 208, 0xFFB5C2D4, false);
-        } else if (page == Page.VISUALS) {
-            graphics.text(this.font, "Fullbright changes local gamma. Hold C to zoom.", contentX, top + 174, 0xFFB5C2D4, false);
-        } else if (page == Page.PLAYER) {
-            graphics.text(this.font, "Auto Totem swaps a carried totem into an empty offhand.", contentX, top + 174, 0xFFB5C2D4, false);
-        } else if (page == Page.WORLD) {
-            graphics.text(this.font, "More world tools will be added after testing.", contentX, top + 174, 0xFFB5C2D4, false);
-        } else if (page == Page.HUD) {
-            graphics.text(this.font, "Visible-only entity indicators; no through-wall tracking.", contentX, top + 294, 0xFFB5C2D4, false);
-        } else if (page == Page.UTILITY) {
-            graphics.text(this.font, "Base Finder only analyses chunks already loaded.", contentX, top + 174, 0xFFB5C2D4, false);
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
+        int x = left(), y = top();
+        if (mouseX >= x + 12 && mouseX <= x + 124) {
+            if (mouseY >= y + 45 && mouseY <= y + 66) { tab = Tab.MODULES; scroll = 0; return true; }
+            if (mouseY >= y + 70 && mouseY <= y + 91) { tab = Tab.COMBOS; scroll = 0; return true; }
+            if (mouseY >= y + 95 && mouseY <= y + 116) { tab = Tab.HUD; scroll = 0; return true; }
+            int index = (int)((mouseY - (y + 149)) / 23);
+            if (mouseY >= y + 149 && index >= 0 && index < Category.values().length) {
+                category = Category.values()[index]; tab = Tab.MODULES; scroll = 0; search = ""; return true;
+            }
         }
-        graphics.text(this.font, "RIGHT SHIFT: menu     C: zoom     ESC: close", left + 16, top + 324, 0xFF7F91A8, false);
+        int contentX = x + 153;
+        if (mouseX >= contentX && mouseX <= x + PANEL_W - 14) {
+            if (tab == Tab.COMBOS && mouseY >= y + 126 && mouseY <= y + 300) {
+                int preset = (int)((mouseY - (y + 126)) / 58);
+                if (preset >= 0 && preset < 3) { applyPreset(preset); return true; }
+            }
+            if ((tab == Tab.MODULES || tab == Tab.HUD) && mouseY >= y + 96 && mouseY <= y + 96 + 8 * ROW_H) {
+                int row = (int)((mouseY - (y + 96)) / ROW_H) + scroll;
+                List<ModuleEntry> list = tab == Tab.HUD ? hudModules() : modules();
+                if (row >= 0 && row < list.size() && !list.get(row).name().equals("Zoom")) {
+                    list.get(row).toggle().run();
+                    return true;
+                }
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (tab == Tab.MODULES || tab == Tab.HUD) {
+            scroll = Math.max(0, scroll + (verticalAmount < 0 ? 1 : -1));
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    @Override
+    public boolean charTyped(char character, int modifiers) {
+        if (tab != Tab.COMBOS && !Character.isISOControl(character)) {
+            search += character;
+            scroll = 0;
+            return true;
+        }
+        return super.charTyped(character, modifiers);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 256) { onClose(); return true; }
+        if (keyCode == 259 && !search.isEmpty()) {
+            search = search.substring(0, search.length() - 1);
+            scroll = 0;
+            return true;
+        }
+        if (keyCode == 256) return true;
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 }
