@@ -28,6 +28,7 @@ public final class StormClient implements ClientModInitializer {
     public static boolean hudArmorEnabled = false;
     public static boolean hudActiveModulesEnabled = false;
     public static boolean hudMaceEnabled = false;
+    public static boolean hudVitalsEnabled = false;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
