@@ -80,11 +80,8 @@ public final class StormClickGuiScreen extends Screen {
         } else if (page == Page.COMBAT) {
             addRenderableWidget(Button.builder(Component.literal("Mace PvP HUD  →  configure in HUD"), button ->
                     open(Page.HUD)).bounds(contentX, y, buttonWidth, 27).build());
-            addRenderableWidget(Button.builder(Component.literal("Combat modules are added individually"), button -> {})
-                    .bounds(contentX, y + 34, buttonWidth, 27).build());
-        } else {
-            addRenderableWidget(Button.builder(Component.literal("World tools are being built in tested batches"), button -> {})
-                    .bounds(contentX, y, buttonWidth, 27).build());
+        } else if (page == Page.WORLD) {
+            // World tools will be added here when implemented.
         }
 
         addRenderableWidget(Button.builder(Component.literal("CLOSE  [ESC]"), button -> onClose())
