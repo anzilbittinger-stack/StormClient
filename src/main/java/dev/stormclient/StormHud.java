@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 
 /** Small client-side information HUD. It only displays information already available to the player. */
@@ -19,7 +20,7 @@ public final class StormHud {
 
     private static void render(GuiGraphicsExtractor graphics, net.minecraft.client.DeltaTracker deltaTracker) {
         Minecraft client = Minecraft.getInstance();
-        if (client.player == null || client.level == null || client.screen != null) return;
+        if (client.player == null || client.level == null) return;
 
         int x = 8;
         int y = 8;
@@ -46,8 +47,8 @@ public final class StormHud {
         }
         if (StormClient.hudArmorEnabled) {
             int armor = 0;
-            for (var stack : client.player.getArmorSlots()) {
-                if (!stack.isEmpty()) armor++;
+            for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+                if (!client.player.getItemBySlot(slot).isEmpty()) armor++;
             }
             draw(graphics, "Armor pieces: " + armor + "/4", x, y);
             y += line;
