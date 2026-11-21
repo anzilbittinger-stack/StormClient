@@ -88,9 +88,10 @@ public final class StormClickGuiScreen extends Screen {
                 if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.connection.sendChat("#base clear");
             }) .bounds(contentX, y + 87, buttonWidth, 24).build());
         } else if (page == Page.PLAYER) {
-            toggle(buttonLeft, y, buttonWidth, totemAlertLabel(), () -> StormClient.totemAlertEnabled = !StormClient.totemAlertEnabled, 19);
+            toggle(buttonLeft, y, buttonWidth, autoTotemLabel(), () -> StormClient.autoTotemEnabled = !StormClient.autoTotemEnabled, 20);
+            toggle(buttonLeft, y + 34, buttonWidth, totemAlertLabel(), () -> StormClient.totemAlertEnabled = !StormClient.totemAlertEnabled, 19);
             addRenderableWidget(Button.builder(Component.literal("Inventory + Bundle Inspector"), button ->
-                    BundleInspector.inspect()).bounds(contentX, y + 34, buttonWidth, 27).build());
+                    BundleInspector.inspect()).bounds(contentX, y + 68, buttonWidth, 27).build());
         } else if (page == Page.COMBAT) {
             addRenderableWidget(Button.builder(Component.literal("Mace PvP HUD  →  configure in HUD"), button ->
                     open(Page.HUD)).bounds(contentX, y, buttonWidth, 27).build());
@@ -137,6 +138,7 @@ public final class StormClickGuiScreen extends Screen {
             case 17 -> visiblePlayersLabel();
             case 18 -> visibleMobsLabel();
             case 19 -> totemAlertLabel();
+            case 20 -> autoTotemLabel();
             default -> Component.literal("Unknown");
         };
     }
@@ -168,6 +170,7 @@ public final class StormClickGuiScreen extends Screen {
     private static Component visiblePlayersLabel() { return state("Visible Player Indicators", StormClient.visiblePlayersEnabled); }
     private static Component visibleMobsLabel() { return state("Visible Mob Indicators", StormClient.visibleMobsEnabled); }
     private static Component totemAlertLabel() { return state("Totem Alert", StormClient.totemAlertEnabled); }
+    private static Component autoTotemLabel() { return state("Auto Totem (empty offhand only)", StormClient.autoTotemEnabled); }
     private static Component baseFinderLabel() { return state("Base Finder", StormClient.baseFinderEnabled); }
 
     @Override
@@ -208,7 +211,7 @@ public final class StormClickGuiScreen extends Screen {
         } else if (page == Page.VISUALS) {
             graphics.text(this.font, "Fullbright changes local gamma. Hold C to zoom.", contentX, top + 174, 0xFFB5C2D4, false);
         } else if (page == Page.PLAYER) {
-            graphics.text(this.font, "Inventory inspection is read-only.", contentX, top + 174, 0xFFB5C2D4, false);
+            graphics.text(this.font, "Auto Totem swaps a carried totem into an empty offhand.", contentX, top + 174, 0xFFB5C2D4, false);
         } else if (page == Page.WORLD) {
             graphics.text(this.font, "More world tools will be added after testing.", contentX, top + 174, 0xFFB5C2D4, false);
         } else if (page == Page.HUD) {
