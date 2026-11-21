@@ -37,7 +37,10 @@ public final class StormClient implements ClientModInitializer {
     public static boolean visibleMobsEnabled = false;
     public static boolean totemAlertEnabled = false;
     public static boolean autoTotemEnabled = false;
+    public static boolean autoArmorEnabled = false;
+    public static boolean autoRespawnEnabled = false;
     private static int autoTotemCooldown = 0;
+    private static int autoArmorCooldown = 0;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
@@ -89,6 +92,40 @@ public final class StormClient implements ClientModInitializer {
             }
 
             if (autoTotemCooldown > 0) autoTotemCooldown--;
+            if (autoArmorCooldown > 0) autoArmorCooldown--;
+            if (autoArmorEnabled && autoArmorCooldown == 0
+                    && client.player.containerMenu == client.player.inventoryMenu
+                    && client.gameMode != null) {
+                net.minecraft.world.entity.EquipmentSlot[] armorSlots = {
+                        net.minecraft.world.entity.EquipmentSlot.HEAD,
+                        net.minecraft.world.entity.EquipmentSlot.CHEST,
+                        net.minecraft.world.entity.EquipmentSlot.LEGS,
+                        net.minecraft.world.entity.EquipmentSlot.FEET
+                };
+                for (int i = 0; i < armorSlots.length; i++) {
+                    if (!client.player.getItemBySlot(armorSlots[i]).isEmpty()) continue;
+                    for (int hotbar = 0; hotbar < 9; hotbar++) {
+                        var candidate = client.player.getInventory().getItem(hotbar);
+                        if (candidate.getItem() instanceof net.minecraft.world.item.ArmorItem armor
+                                && armor.getEquipmentSlot() == armorSlots[i]) {
+                            client.gameMode.handleContainerInput(
+                                    client.player.inventoryMenu.containerId,
+                                    5 + i,
+                                    hotbar,
+                                    net.minecraft.world.inventory.ContainerInput.SWAP,
+                                    client.player
+                            );
+                            autoArmorCooldown = 8;
+                            break;
+                        }
+                    }
+                    if (autoArmorCooldown > 0) break;
+                }
+            }
+            if (autoRespawnEnabled && client.player.isDeadOrDying()
+                    && client.screen instanceof net.minecraft.client.gui.screens.DeathScreen) {
+                client.player.respawn();
+            }
             if (autoTotemEnabled && autoTotemCooldown == 0
                     && client.player.containerMenu == client.player.inventoryMenu
                     && client.gameMode != null
