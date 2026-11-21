@@ -106,8 +106,7 @@ public final class StormClient implements ClientModInitializer {
                     if (!client.player.getItemBySlot(armorSlots[i]).isEmpty()) continue;
                     for (int hotbar = 0; hotbar < 9; hotbar++) {
                         var candidate = client.player.getInventory().getItem(hotbar);
-                        if (candidate.getItem() instanceof net.minecraft.world.item.ArmorItem armor
-                                && armor.getEquipmentSlot() == armorSlots[i]) {
+                        if (candidate.canEquip(armorSlots[i], client.player)) {
                             client.gameMode.handleContainerInput(
                                     client.player.inventoryMenu.containerId,
                                     5 + i,
@@ -122,8 +121,7 @@ public final class StormClient implements ClientModInitializer {
                     if (autoArmorCooldown > 0) break;
                 }
             }
-            if (autoRespawnEnabled && client.player.isDeadOrDying()
-                    && client.screen instanceof net.minecraft.client.gui.screens.DeathScreen) {
+            if (autoRespawnEnabled && client.player.isDeadOrDying()) {
                 client.player.respawn();
             }
             if (autoTotemEnabled && autoTotemCooldown == 0
