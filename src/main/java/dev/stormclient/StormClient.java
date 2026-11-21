@@ -69,7 +69,8 @@ public final class StormClient implements ClientModInitializer {
 
         ClientSendMessageEvents.ALLOW_CHAT.register(message -> {
             if (message.equalsIgnoreCase("#base") || message.equalsIgnoreCase("#base list")
-                    || message.equalsIgnoreCase("#base clear")) {
+                    || message.equalsIgnoreCase("#base clear") || message.equalsIgnoreCase("#base tp")
+                    || message.toLowerCase(java.util.Locale.ROOT).startsWith("#base tp ")) {
                 Minecraft.getInstance().execute(() -> BaseFinder.handleChatCommand(message));
                 return false;
             }
@@ -106,7 +107,16 @@ public final class StormClient implements ClientModInitializer {
                     if (!client.player.getItemBySlot(armorSlots[i]).isEmpty()) continue;
                     for (int hotbar = 0; hotbar < 9; hotbar++) {
                         var candidate = client.player.getInventory().getItem(hotbar);
-                        if (candidate.canEquip(armorSlots[i], client.player)) {
+                        String itemName = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                                .getKey(candidate.getItem()).getPath();
+                        boolean matchesSlot = switch (armorSlots[i]) {
+                            case HEAD -> itemName.endsWith("_helmet") || itemName.equals("turtle_helmet");
+                            case CHEST -> itemName.endsWith("_chestplate") || itemName.equals("elytra");
+                            case LEGS -> itemName.endsWith("_leggings");
+                            case FEET -> itemName.endsWith("_boots");
+                            default -> false;
+                        };
+                        if (matchesSlot) {
                             client.gameMode.handleContainerInput(
                                     client.player.inventoryMenu.containerId,
                                     5 + i,
