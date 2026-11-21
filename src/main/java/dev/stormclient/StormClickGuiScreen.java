@@ -50,8 +50,10 @@ public final class StormClickGuiScreen extends Screen {
             toggle(buttonLeft, y + 68, buttonWidth, elytraLabel(), () -> StormClient.elytraAssistEnabled = !StormClient.elytraAssistEnabled, 2);
         } else if (page == Page.VISUALS) {
             toggle(buttonLeft, y, buttonWidth, fullbrightLabel(), () -> StormClient.fullbrightEnabled = !StormClient.fullbrightEnabled, 3);
+            toggle(buttonLeft, y + 29, buttonWidth, visiblePlayersLabel(), () -> StormClient.visiblePlayersEnabled = !StormClient.visiblePlayersEnabled, 17);
+            toggle(buttonLeft, y + 58, buttonWidth, visibleMobsLabel(), () -> StormClient.visibleMobsEnabled = !StormClient.visibleMobsEnabled, 18);
             addRenderableWidget(Button.builder(Component.literal("Zoom: HOLD C  [KEYBIND]"), button -> {})
-                     .bounds(contentX, y + 29, buttonWidth, 24).build());
+                     .bounds(contentX, y + 87, buttonWidth, 24).build());
         } else if (page == Page.HUD) {
             toggle(buttonLeft, y, buttonWidth, fpsLabel(), () -> StormClient.hudFpsEnabled = !StormClient.hudFpsEnabled, 4);
             toggle(buttonLeft, y + 26, buttonWidth, coordinatesLabel(), () -> StormClient.hudCoordinatesEnabled = !StormClient.hudCoordinatesEnabled, 5);
@@ -69,9 +71,8 @@ public final class StormClickGuiScreen extends Screen {
             toggleCompact(buttonLeft, y + 120, buttonWidth, maceLabel(), () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled, 11, 6);
             toggleCompact(buttonLeft, y + 140, buttonWidth, vitalsLabel(), () -> StormClient.hudVitalsEnabled = !StormClient.hudVitalsEnabled, 12, 7);
             toggleCompact(buttonLeft, y + 160, buttonWidth, pingLabel(), () -> StormClient.hudPingEnabled = !StormClient.hudPingEnabled, 13, 8);
-            toggleCompact(buttonLeft, y + 180, buttonWidth, timeLabel(), () -> StormClient.hudWorldTimeEnabled = !StormClient.hudWorldTimeEnabled, 14, 9);
-            toggleCompact(buttonLeft, y + 200, buttonWidth, heldDurabilityLabel(), () -> StormClient.hudHeldDurabilityEnabled = !StormClient.hudHeldDurabilityEnabled, 15, 10);
-            toggleCompact(buttonLeft, y + 220, buttonWidth, armorDurabilityLabel(), () -> StormClient.hudArmorDurabilityEnabled = !StormClient.hudArmorDurabilityEnabled, 16, 11);
+            toggleCompact(buttonLeft, y + 180, buttonWidth, heldDurabilityLabel(), () -> StormClient.hudHeldDurabilityEnabled = !StormClient.hudHeldDurabilityEnabled, 15, 9);
+            toggleCompact(buttonLeft, y + 200, buttonWidth, armorDurabilityLabel(), () -> StormClient.hudArmorDurabilityEnabled = !StormClient.hudArmorDurabilityEnabled, 16, 10);
         } else if (page == Page.UTILITY) {
             toggle(buttonLeft, y, buttonWidth, baseFinderLabel(), () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled, 10);
             addRenderableWidget(Button.builder(Component.literal("Scan nearby loaded chunks  (#base)"), button -> {
@@ -87,8 +88,9 @@ public final class StormClickGuiScreen extends Screen {
                 if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.connection.sendChat("#base clear");
             }) .bounds(contentX, y + 87, buttonWidth, 24).build());
         } else if (page == Page.PLAYER) {
+            toggle(buttonLeft, y, buttonWidth, totemAlertLabel(), () -> StormClient.totemAlertEnabled = !StormClient.totemAlertEnabled, 19);
             addRenderableWidget(Button.builder(Component.literal("Inventory + Bundle Inspector"), button ->
-                    BundleInspector.inspect()).bounds(contentX, y, buttonWidth, 27).build());
+                    BundleInspector.inspect()).bounds(contentX, y + 34, buttonWidth, 27).build());
         } else if (page == Page.COMBAT) {
             addRenderableWidget(Button.builder(Component.literal("Mace PvP HUD  →  configure in HUD"), button ->
                     open(Page.HUD)).bounds(contentX, y, buttonWidth, 27).build());
@@ -130,9 +132,11 @@ public final class StormClickGuiScreen extends Screen {
             case 11 -> maceLabel();
             case 12 -> vitalsLabel();
             case 13 -> pingLabel();
-            case 14 -> timeLabel();
             case 15 -> heldDurabilityLabel();
             case 16 -> armorDurabilityLabel();
+            case 17 -> visiblePlayersLabel();
+            case 18 -> visibleMobsLabel();
+            case 19 -> totemAlertLabel();
             default -> Component.literal("Unknown");
         };
     }
@@ -159,9 +163,11 @@ public final class StormClickGuiScreen extends Screen {
     private static Component maceLabel() { return state("Mace PvP HUD (display only)", StormClient.hudMaceEnabled); }
     private static Component vitalsLabel() { return state("Health + Hunger HUD", StormClient.hudVitalsEnabled); }
     private static Component pingLabel() { return state("Ping HUD", StormClient.hudPingEnabled); }
-    private static Component timeLabel() { return state("World Time HUD", StormClient.hudWorldTimeEnabled); }
     private static Component heldDurabilityLabel() { return state("Held Item Durability HUD", StormClient.hudHeldDurabilityEnabled); }
     private static Component armorDurabilityLabel() { return state("Armor Durability HUD", StormClient.hudArmorDurabilityEnabled); }
+    private static Component visiblePlayersLabel() { return state("Visible Player Indicators", StormClient.visiblePlayersEnabled); }
+    private static Component visibleMobsLabel() { return state("Visible Mob Indicators", StormClient.visibleMobsEnabled); }
+    private static Component totemAlertLabel() { return state("Totem Alert", StormClient.totemAlertEnabled); }
     private static Component baseFinderLabel() { return state("Base Finder", StormClient.baseFinderEnabled); }
 
     @Override
@@ -206,7 +212,7 @@ public final class StormClickGuiScreen extends Screen {
         } else if (page == Page.WORLD) {
             graphics.text(this.font, "More world tools will be added after testing.", contentX, top + 174, 0xFFB5C2D4, false);
         } else if (page == Page.HUD) {
-            graphics.text(this.font, "Extra readouts: ping, world time and item durability.", contentX, top + 294, 0xFFB5C2D4, false);
+            graphics.text(this.font, "Visible-only entity indicators; no through-wall tracking.", contentX, top + 294, 0xFFB5C2D4, false);
         } else if (page == Page.UTILITY) {
             graphics.text(this.font, "Base Finder only analyses chunks already loaded.", contentX, top + 174, 0xFFB5C2D4, false);
         }
