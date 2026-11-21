@@ -60,7 +60,18 @@ public final class StormClickGuiScreen extends Screen {
             toggle(buttonLeft, y + 104, buttonWidth, armorLabel(), () -> StormClient.hudArmorEnabled = !StormClient.hudArmorEnabled, 8);
             toggle(buttonLeft, y + 130, buttonWidth, modulesLabel(), () -> StormClient.hudActiveModulesEnabled = !StormClient.hudActiveModulesEnabled, 9);
             toggle(buttonLeft, y + 156, buttonWidth, maceLabel(), () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled, 11);
-            toggle(buttonLeft, y + 182, buttonWidth, vitalsLabel(), () -> StormClient.hudVitalsEnabled = !StormClient.hudVitalsEnabled, 12);
+            toggleCompact(buttonLeft, y, buttonWidth, fpsLabel(), () -> StormClient.hudFpsEnabled = !StormClient.hudFpsEnabled, 4, 0);
+            toggleCompact(buttonLeft, y + 20, buttonWidth, coordinatesLabel(), () -> StormClient.hudCoordinatesEnabled = !StormClient.hudCoordinatesEnabled, 5, 1);
+            toggleCompact(buttonLeft, y + 40, buttonWidth, directionLabel(), () -> StormClient.hudDirectionEnabled = !StormClient.hudDirectionEnabled, 6, 2);
+            toggleCompact(buttonLeft, y + 60, buttonWidth, heldItemLabel(), () -> StormClient.hudHeldItemEnabled = !StormClient.hudHeldItemEnabled, 7, 3);
+            toggleCompact(buttonLeft, y + 80, buttonWidth, armorLabel(), () -> StormClient.hudArmorEnabled = !StormClient.hudArmorEnabled, 8, 4);
+            toggleCompact(buttonLeft, y + 100, buttonWidth, modulesLabel(), () -> StormClient.hudActiveModulesEnabled = !StormClient.hudActiveModulesEnabled, 9, 5);
+            toggleCompact(buttonLeft, y + 120, buttonWidth, maceLabel(), () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled, 11, 6);
+            toggleCompact(buttonLeft, y + 140, buttonWidth, vitalsLabel(), () -> StormClient.hudVitalsEnabled = !StormClient.hudVitalsEnabled, 12, 7);
+            toggleCompact(buttonLeft, y + 160, buttonWidth, pingLabel(), () -> StormClient.hudPingEnabled = !StormClient.hudPingEnabled, 13, 8);
+            toggleCompact(buttonLeft, y + 180, buttonWidth, timeLabel(), () -> StormClient.hudWorldTimeEnabled = !StormClient.hudWorldTimeEnabled, 14, 9);
+            toggleCompact(buttonLeft, y + 200, buttonWidth, heldDurabilityLabel(), () -> StormClient.hudHeldDurabilityEnabled = !StormClient.hudHeldDurabilityEnabled, 15, 10);
+            toggleCompact(buttonLeft, y + 220, buttonWidth, armorDurabilityLabel(), () -> StormClient.hudArmorDurabilityEnabled = !StormClient.hudArmorDurabilityEnabled, 16, 11);
         } else if (page == Page.UTILITY) {
             toggle(buttonLeft, y, buttonWidth, baseFinderLabel(), () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled, 10);
             addRenderableWidget(Button.builder(Component.literal("Scan nearby loaded chunks  (#base)"), button -> {
@@ -89,6 +100,13 @@ public final class StormClickGuiScreen extends Screen {
                  .bounds(contentX, top + 304, buttonWidth, 22).build());
     }
 
+    private void toggleCompact(int left, int y, int width, Component label, Runnable change, int id, int row) {
+        addRenderableWidget(Button.builder(label, button -> {
+            change.run();
+            button.setMessage(labelFor(id));
+        }).bounds(left + 20, y, width, 18).build());
+    }
+
     private void toggle(int left, int y, int width, Component label, Runnable change, int id) {
         addRenderableWidget(Button.builder(label, button -> {
             change.run();
@@ -111,6 +129,10 @@ public final class StormClickGuiScreen extends Screen {
             case 10 -> baseFinderLabel();
             case 11 -> maceLabel();
             case 12 -> vitalsLabel();
+            case 13 -> pingLabel();
+            case 14 -> timeLabel();
+            case 15 -> heldDurabilityLabel();
+            case 16 -> armorDurabilityLabel();
             default -> Component.literal("Unknown");
         };
     }
@@ -136,6 +158,10 @@ public final class StormClickGuiScreen extends Screen {
     private static Component modulesLabel() { return state("Active Modules HUD", StormClient.hudActiveModulesEnabled); }
     private static Component maceLabel() { return state("Mace PvP HUD (display only)", StormClient.hudMaceEnabled); }
     private static Component vitalsLabel() { return state("Health + Hunger HUD", StormClient.hudVitalsEnabled); }
+    private static Component pingLabel() { return state("Ping HUD", StormClient.hudPingEnabled); }
+    private static Component timeLabel() { return state("World Time HUD", StormClient.hudWorldTimeEnabled); }
+    private static Component heldDurabilityLabel() { return state("Held Item Durability HUD", StormClient.hudHeldDurabilityEnabled); }
+    private static Component armorDurabilityLabel() { return state("Armor Durability HUD", StormClient.hudArmorDurabilityEnabled); }
     private static Component baseFinderLabel() { return state("Base Finder", StormClient.baseFinderEnabled); }
 
     @Override
@@ -180,7 +206,7 @@ public final class StormClickGuiScreen extends Screen {
         } else if (page == Page.WORLD) {
             graphics.text(this.font, "More world tools will be added after testing.", contentX, top + 174, 0xFFB5C2D4, false);
         } else if (page == Page.HUD) {
-            graphics.text(this.font, "Mace HUD is display-only; vitals show health and food.", contentX, top + 294, 0xFFB5C2D4, false);
+            graphics.text(this.font, "Extra readouts: ping, world time and item durability.", contentX, top + 294, 0xFFB5C2D4, false);
         } else if (page == Page.UTILITY) {
             graphics.text(this.font, "Base Finder only analyses chunks already loaded.", contentX, top + 174, 0xFFB5C2D4, false);
         }
