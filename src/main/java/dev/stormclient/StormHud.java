@@ -60,6 +60,18 @@ public final class StormHud {
                     + (StormClient.fullbrightEnabled ? "Fullbright " : "")
                     + (StormClient.elytraAssistEnabled ? "Elytra " : "");
             draw(graphics, modules.equals("Modules: ") ? "Modules: none" : modules, x, y);
+            y += line;
+        }
+        if (StormClient.hudMaceEnabled) {
+            String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                    .getKey(client.player.getMainHandItem().getItem()).getPath();
+            if (itemId.equals("mace")) {
+                double verticalSpeed = client.player.getDeltaMovement().y;
+                String state = client.player.onGround() ? "GROUNDED"
+                        : verticalSpeed < -0.08 ? "FALLING" : "AIRBORNE";
+                draw(graphics, String.format(java.util.Locale.ROOT,
+                        "MACE: %s | Y speed: %.2f", state, verticalSpeed), x, y);
+            }
         }
     }
 
