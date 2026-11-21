@@ -70,6 +70,10 @@ public final class StormClickGuiScreen extends Screen {
             case PLAYER -> {
                 all.add(entry("Auto Totem", "Moves a carried totem into an empty offhand",
                         () -> StormClient.autoTotemEnabled, () -> StormClient.autoTotemEnabled = !StormClient.autoTotemEnabled));
+                all.add(entry("Auto Armor", "Equips matching armor from the hotbar into empty armor slots",
+                        () -> StormClient.autoArmorEnabled, () -> StormClient.autoArmorEnabled = !StormClient.autoArmorEnabled));
+                all.add(entry("Auto Respawn", "Respawns when the death screen is open",
+                        () -> StormClient.autoRespawnEnabled, () -> StormClient.autoRespawnEnabled = !StormClient.autoRespawnEnabled));
                 all.add(entry("Totem Alert", "Shows the number of carried totems",
                         () -> StormClient.totemAlertEnabled, () -> StormClient.totemAlertEnabled = !StormClient.totemAlertEnabled));
             }
