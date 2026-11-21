@@ -279,7 +279,7 @@ public final class StormClickGuiScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        int keyCode = event.keycode();
+        int keyCode = event.input();
         if (keyCode == 27) { onClose(); return true; }
         if (keyCode == 8 && !search.isEmpty()) {
             search = search.substring(0, search.length() - 1);
