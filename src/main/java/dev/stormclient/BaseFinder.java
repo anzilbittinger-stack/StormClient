@@ -15,6 +15,7 @@ import net.minecraft.world.level.Level;
 
 public final class BaseFinder {
     private static final List<Waypoint> WAYPOINTS = new ArrayList<>();
+    private static Waypoint navigationTarget;
 
     private BaseFinder() {}
 
@@ -25,7 +26,32 @@ public final class BaseFinder {
         String command = message.toLowerCase(Locale.ROOT).trim();
         if (command.equals("#base clear")) {
             WAYPOINTS.clear();
+            navigationTarget = null;
             tell("Cleared saved base markers.");
+            return;
+        }
+        if (command.startsWith("#base tp")) {
+            if (WAYPOINTS.isEmpty()) {
+                tell("No saved base markers. Run #base first.");
+                return;
+            }
+            int index = 0;
+            String[] parts = command.split("\\s+");
+            if (parts.length >= 3) {
+                try { index = Integer.parseInt(parts[2]) - 1; }
+                catch (NumberFormatException ignored) {
+                    tell("Usage: #base tp [number]");
+                    return;
+                }
+            }
+            if (index < 0 || index >= WAYPOINTS.size()) {
+                tell("That base number does not exist. Use #base list.");
+                return;
+            }
+            navigationTarget = WAYPOINTS.get(index);
+            tell("Navigation target set to " + navigationTarget.name + " at "
+                    + navigationTarget.x + " " + navigationTarget.y + " " + navigationTarget.z
+                    + ". Follow the coordinates in your HUD; this does not teleport you.");
             return;
         }
         if (command.equals("#base list")) {
@@ -64,6 +90,15 @@ public final class BaseFinder {
         tell("Possible base: " + name + " at " + x + " " + y + " " + z
                 + " | score " + candidate.score + " | " + Math.round(distance) + " blocks away.");
         tell("Saved for this session. Use #base list or #base clear.");
+    }
+
+    public static String getNavigationText(Minecraft client) {
+        if (navigationTarget == null || client.player == null) return null;
+        double dx = navigationTarget.x + 0.5 - client.player.getX();
+        double dz = navigationTarget.z + 0.5 - client.player.getZ();
+        double distance = Math.sqrt(dx * dx + dz * dz);
+        return String.format(Locale.ROOT, "Base waypoint: %s | %.0fm | X %.0f Z %.0f",
+                navigationTarget.name, distance, (double) navigationTarget.x, (double) navigationTarget.z);
     }
 
     private static Candidate scan(Level level, BlockPos origin) {
