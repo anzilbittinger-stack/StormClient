@@ -90,7 +90,6 @@ public final class StormClient implements ClientModInitializer {
 
             if (autoTotemCooldown > 0) autoTotemCooldown--;
             if (autoTotemEnabled && autoTotemCooldown == 0
-                    && client.screen == null
                     && client.player.containerMenu == client.player.inventoryMenu
                     && client.gameMode != null
                     && client.player.getOffhandItem().isEmpty()) {
@@ -98,11 +97,11 @@ public final class StormClient implements ClientModInitializer {
                     var stack = client.player.getInventory().getItem(inventorySlot);
                     if (stack.is(net.minecraft.world.item.Items.TOTEM_OF_UNDYING)) {
                         int menuSlot = inventorySlot < 9 ? inventorySlot + 36 : inventorySlot;
-                        client.gameMode.handleInventoryMouseClick(
+                        client.gameMode.handleContainerInput(
                                 client.player.inventoryMenu.containerId,
                                 menuSlot,
                                 40,
-                                net.minecraft.world.inventory.ClickType.SWAP,
+                                net.minecraft.world.inventory.ContainerInput.SWAP,
                                 client.player
                         );
                         autoTotemCooldown = 10;
