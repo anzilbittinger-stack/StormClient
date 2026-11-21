@@ -77,13 +77,6 @@ public final class StormHud {
                 y += line;
             }
         }
-        if (StormClient.hudWorldTimeEnabled) {
-            long ticks = Math.floorMod(client.level.getDayTime(), 24000L);
-            int hours = (int) ((ticks / 1000L + 6L) % 24L);
-            int minutes = (int) ((ticks % 1000L) * 60L / 1000L);
-            draw(graphics, String.format(java.util.Locale.ROOT, "World time: %02d:%02d", hours, minutes), x, y);
-            y += line;
-        }
         if (StormClient.hudHeldDurabilityEnabled) {
             var held = client.player.getMainHandItem();
             if (!held.isEmpty() && held.getMaxDamage() > 0) {
@@ -108,6 +101,44 @@ public final class StormHud {
             if (found) {
                 draw(graphics, armorState.toString(), x, y);
                 y += line;
+            }
+        }
+        if (StormClient.totemAlertEnabled) {
+            int totems = client.player.getOffhandItem().is(net.minecraft.world.item.Items.TOTEM_OF_UNDYING) ? 1 : 0;
+            for (int i = 0; i < client.player.getInventory().getContainerSize(); i++) {
+                var stack = client.player.getInventory().getItem(i);
+                if (stack.is(net.minecraft.world.item.Items.TOTEM_OF_UNDYING)) totems += stack.getCount();
+            }
+            if (totems == 0) {
+                draw(graphics, "WARNING: NO TOTEMS IN INVENTORY", x, y);
+                y += line;
+            } else {
+                draw(graphics, "Totems available: " + totems, x, y);
+                y += line;
+            }
+        }
+        if (StormClient.visiblePlayersEnabled) {
+            int shown = 0;
+            for (var other : client.level.players()) {
+                if (other == client.player || !other.isAlive() || !client.player.hasLineOfSight(other)) continue;
+                double distance = client.player.distanceTo(other);
+                if (distance > 96.0) continue;
+                draw(graphics, String.format(java.util.Locale.ROOT, "Player: %s (%.0fm)",
+                        other.getName().getString(), distance), x, y);
+                y += line;
+                if (++shown >= 5) break;
+            }
+        }
+        if (StormClient.visibleMobsEnabled) {
+            int shown = 0;
+            var box = client.player.getBoundingBox().inflate(64.0);
+            for (var mob : client.level.getEntitiesOfClass(net.minecraft.world.entity.Mob.class, box,
+                    entity -> entity.isAlive() && client.player.hasLineOfSight(entity))) {
+                double distance = client.player.distanceTo(mob);
+                draw(graphics, String.format(java.util.Locale.ROOT, "Mob: %s (%.0fm)",
+                        mob.getType().getDescription().getString(), distance), x, y);
+                y += line;
+                if (++shown >= 5) break;
             }
         }
         if (StormClient.hudMaceEnabled) {
