@@ -7,6 +7,9 @@ import java.util.function.BooleanSupplier;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -222,8 +225,10 @@ public final class StormClickGuiScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
+        double mouseY = event.y();
+        if (event.button() != 0) return super.mouseClicked(event, doubleClick);
         int x = left(), y = top();
         if (mouseX >= x + 12 && mouseX <= x + 124) {
             if (mouseY >= y + 45 && mouseY <= y + 66) { tab = Tab.MODULES; scroll = 0; return true; }
@@ -249,7 +254,7 @@ public final class StormClickGuiScreen extends Screen {
                 }
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
@@ -262,24 +267,25 @@ public final class StormClickGuiScreen extends Screen {
     }
 
     @Override
-    public boolean charTyped(char character, int modifiers) {
-        if (tab != Tab.COMBOS && !Character.isISOControl(character)) {
-            search += character;
+    public boolean charTyped(CharacterEvent event) {
+        int codepoint = event.codepoint();
+        if (tab != Tab.COMBOS && !Character.isISOControl(codepoint)) {
+            search += new String(Character.toChars(codepoint));
             scroll = 0;
             return true;
         }
-        return super.charTyped(character, modifiers);
+        return super.charTyped(event);
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) { onClose(); return true; }
-        if (keyCode == 259 && !search.isEmpty()) {
+    public boolean keyPressed(KeyEvent event) {
+        int keyCode = event.keycode();
+        if (keyCode == 27) { onClose(); return true; }
+        if (keyCode == 8 && !search.isEmpty()) {
             search = search.substring(0, search.length() - 1);
             scroll = 0;
             return true;
         }
-        if (keyCode == 256) return true;
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 }
