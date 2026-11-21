@@ -20,7 +20,13 @@ public final class StormClient implements ClientModInitializer {
     public static boolean fullbrightEnabled = false;
     public static boolean autoSprintEnabled = false;
     public static boolean baseFinderEnabled = true;
-    public static boolean elytraAssistEnabled = false;\n    public static boolean hudFpsEnabled = true;\n    public static boolean hudCoordinatesEnabled = true;\n    public static boolean hudDirectionEnabled = false;\n    public static boolean hudHeldItemEnabled = false;\n    public static boolean hudArmorEnabled = false;\n    public static boolean hudActiveModulesEnabled = false;
+    public static boolean elytraAssistEnabled = false;
+    public static boolean hudFpsEnabled = true;
+    public static boolean hudCoordinatesEnabled = true;
+    public static boolean hudDirectionEnabled = false;
+    public static boolean hudHeldItemEnabled = false;
+    public static boolean hudArmorEnabled = false;
+    public static boolean hudActiveModulesEnabled = false;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
@@ -117,6 +123,7 @@ public final class StormClient implements ClientModInitializer {
             }
         });
 
-        StormHud.register();\n        LOGGER.info("StormClient initialised. Right Shift opens ClickGUI; C zooms.");
+        StormHud.register();
+        LOGGER.info("StormClient initialised. Right Shift opens ClickGUI; C zooms.");
     }
 }
