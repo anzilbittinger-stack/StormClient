@@ -60,6 +60,7 @@ public final class StormClickGuiScreen extends Screen {
             toggle(buttonLeft, y + 124, buttonWidth, armorLabel(), () -> StormClient.hudArmorEnabled = !StormClient.hudArmorEnabled, 8);
             toggle(buttonLeft, y + 155, buttonWidth, modulesLabel(), () -> StormClient.hudActiveModulesEnabled = !StormClient.hudActiveModulesEnabled, 9);
             toggle(buttonLeft, y + 186, buttonWidth, maceLabel(), () -> StormClient.hudMaceEnabled = !StormClient.hudMaceEnabled, 11);
+            toggle(buttonLeft, y + 217, buttonWidth, vitalsLabel(), () -> StormClient.hudVitalsEnabled = !StormClient.hudVitalsEnabled, 12);
         } else if (page == Page.UTILITY) {
             toggle(buttonLeft, y, buttonWidth, baseFinderLabel(), () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled, 10);
             addRenderableWidget(Button.builder(Component.literal("Scan nearby loaded chunks  (#base)"), button -> {
@@ -109,6 +110,7 @@ public final class StormClickGuiScreen extends Screen {
             case 9 -> modulesLabel();
             case 10 -> baseFinderLabel();
             case 11 -> maceLabel();
+            case 12 -> vitalsLabel();
             default -> Component.literal("Unknown");
         };
     }
@@ -133,6 +135,7 @@ public final class StormClickGuiScreen extends Screen {
     private static Component armorLabel() { return state("Armor HUD", StormClient.hudArmorEnabled); }
     private static Component modulesLabel() { return state("Active Modules HUD", StormClient.hudActiveModulesEnabled); }
     private static Component maceLabel() { return state("Mace PvP HUD (display only)", StormClient.hudMaceEnabled); }
+    private static Component vitalsLabel() { return state("Health + Hunger HUD", StormClient.hudVitalsEnabled); }
     private static Component baseFinderLabel() { return state("Base Finder", StormClient.baseFinderEnabled); }
 
     @Override
@@ -177,7 +180,7 @@ public final class StormClickGuiScreen extends Screen {
         } else if (page == Page.WORLD) {
             graphics.text(this.font, "More world tools will be added after testing.", contentX, top + 174, 0xFFB5C2D4, false);
         } else if (page == Page.HUD) {
-            graphics.text(this.font, "Mace HUD is display-only; it never changes attacks or aim.", contentX, top + 318, 0xFFB5C2D4, false);
+            graphics.text(this.font, "Mace HUD is display-only; vitals show health and food.", contentX, top + 336, 0xFFB5C2D4, false);
         } else if (page == Page.UTILITY) {
             graphics.text(this.font, "Base Finder only analyses chunks already loaded.", contentX, top + 174, 0xFFB5C2D4, false);
         }
