@@ -36,6 +36,8 @@ public final class StormClient implements ClientModInitializer {
     public static boolean visiblePlayersEnabled = false;
     public static boolean visibleMobsEnabled = false;
     public static boolean totemAlertEnabled = false;
+    public static boolean autoTotemEnabled = false;
+    private static int autoTotemCooldown = 0;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
@@ -84,6 +86,29 @@ public final class StormClient implements ClientModInitializer {
                     originalFov = -1;
                 }
                 return;
+            }
+
+            if (autoTotemCooldown > 0) autoTotemCooldown--;
+            if (autoTotemEnabled && autoTotemCooldown == 0
+                    && client.screen == null
+                    && client.player.containerMenu == client.player.inventoryMenu
+                    && client.gameMode != null
+                    && client.player.getOffhandItem().isEmpty()) {
+                for (int inventorySlot = 0; inventorySlot < client.player.getInventory().getContainerSize(); inventorySlot++) {
+                    var stack = client.player.getInventory().getItem(inventorySlot);
+                    if (stack.is(net.minecraft.world.item.Items.TOTEM_OF_UNDYING)) {
+                        int menuSlot = inventorySlot < 9 ? inventorySlot + 36 : inventorySlot;
+                        client.gameMode.handleInventoryMouseClick(
+                                client.player.inventoryMenu.containerId,
+                                menuSlot,
+                                40,
+                                net.minecraft.world.inventory.ClickType.SWAP,
+                                client.player
+                        );
+                        autoTotemCooldown = 10;
+                        break;
+                    }
+                }
             }
 
             if (autoSprintEnabled && client.player.input.hasForwardImpulse()) {
