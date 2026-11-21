@@ -33,6 +33,9 @@ public final class StormClient implements ClientModInitializer {
     public static boolean hudWorldTimeEnabled = false;
     public static boolean hudHeldDurabilityEnabled = false;
     public static boolean hudArmorDurabilityEnabled = false;
+    public static boolean visiblePlayersEnabled = false;
+    public static boolean visibleMobsEnabled = false;
+    public static boolean totemAlertEnabled = false;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MOD_ID, "main")
