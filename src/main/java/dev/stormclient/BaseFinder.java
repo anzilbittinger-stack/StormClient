@@ -3,21 +3,64 @@ package dev.stormclient;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
+/**
+ * Heuristic finder for base-like blocks that are exposed to the player's normal view.
+ * It deliberately does not inspect concealed storage through solid terrain.
+ */
 public final class BaseFinder {
     private static final List<Waypoint> WAYPOINTS = new ArrayList<>();
+    private static final List<Candidate> CURRENT_CANDIDATES = new ArrayList<>();
     private static Waypoint navigationTarget;
+    private static int scanCooldown;
+    private static long lastWorldTime = Long.MIN_VALUE;
 
     private BaseFinder() {}
+
+    public static void tick(Minecraft client) {
+        if (!StormClient.baseFinderEnabled || client.player == null || client.level == null) {
+            CURRENT_CANDIDATES.clear();
+            scanCooldown = 0;
+            lastWorldTime = Long.MIN_VALUE;
+            return;
+        }
+        if (client.level.getGameTime() == lastWorldTime) return;
+        lastWorldTime = client.level.getGameTime();
+        if (scanCooldown > 0) {
+            scanCooldown--;
+            return;
+        }
+        CURRENT_CANDIDATES.clear();
+        CURRENT_CANDIDATES.addAll(scan(client.level, client.player));
+        scanCooldown = 40;
+    }
+
+    public static List<String> getOverlayLines() {
+        if (!StormClient.baseFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return List.of();
+        List<String> lines = new ArrayList<>();
+        int count = Math.min(5, CURRENT_CANDIDATES.size());
+        for (int i = 0; i < count; i++) {
+            Candidate candidate = CURRENT_CANDIDATES.get(i);
+            lines.add(String.format(Locale.ROOT, "BASE: %d%% | Chunk %d, %d",
+                    candidate.likelihood(), candidate.chunkX, candidate.chunkZ));
+        }
+        return lines;
+    }
 
     public static void handleChatCommand(String message) {
         Minecraft client = Minecraft.getInstance();
@@ -26,6 +69,7 @@ public final class BaseFinder {
         String command = message.toLowerCase(Locale.ROOT).trim();
         if (command.equals("#base clear")) {
             WAYPOINTS.clear();
+            CURRENT_CANDIDATES.clear();
             navigationTarget = null;
             tell("Cleared saved base markers.");
             return;
@@ -56,14 +100,14 @@ public final class BaseFinder {
         }
         if (command.equals("#base list")) {
             if (WAYPOINTS.isEmpty()) {
-                tell("No saved bases. Use #base to scan nearby loaded chunks.");
+                tell("No saved bases. Walk around while Base Finder is enabled, then use #base list.");
                 return;
             }
-            tell("Saved base markers:");
+            tell("Saved visible base markers:");
             for (int i = 0; i < WAYPOINTS.size(); i++) {
                 Waypoint point = WAYPOINTS.get(i);
                 tell((i + 1) + ". " + point.name + " at " + point.x + " " + point.y + " " + point.z
-                        + " | score " + point.score);
+                        + " | likelihood " + point.score + "%");
             }
             return;
         }
@@ -74,22 +118,24 @@ public final class BaseFinder {
             return;
         }
 
-        tell("Scanning nearby loaded chunks (48-block radius)...");
-        Candidate candidate = scan(client.level, client.player.blockPosition());
-        if (candidate == null || candidate.score < 5) {
-            tell("No likely base activity found. This only checks blocks already loaded by your client.");
+        if (CURRENT_CANDIDATES.isEmpty()) {
+            tell("No likely visible base activity yet. Keep exploring; it rescans automatically.");
             return;
         }
 
-        int x = candidate.x();
-        int y = candidate.y();
-        int z = candidate.z();
-        String name = "Base " + (WAYPOINTS.size() + 1);
-        WAYPOINTS.add(new Waypoint(name, x, y, z, candidate.score));
-        double distance = Math.sqrt(client.player.distanceToSqr(x + 0.5, y + 0.5, z + 0.5));
-        tell("Possible base: " + name + " at " + x + " " + y + " " + z
-                + " | score " + candidate.score + " | " + Math.round(distance) + " blocks away.");
-        tell("Saved for this session. Use #base list or #base clear.");
+        WAYPOINTS.clear();
+        int index = 1;
+        for (Candidate candidate : CURRENT_CANDIDATES) {
+            String name = "Base " + index++;
+            int x = candidate.centerX();
+            int y = candidate.centerY();
+            int z = candidate.centerZ();
+            WAYPOINTS.add(new Waypoint(name, x, y, z, candidate.likelihood()));
+            tell(name + ": " + candidate.likelihood() + "% likely | chunk "
+                    + candidate.chunkX + ", " + candidate.chunkZ + " | approx "
+                    + x + " " + y + " " + z);
+        }
+        tell("Markers are based only on base-like blocks visible to your client. Use #base tp [number] to navigate.");
     }
 
     public static String getNavigationText(Minecraft client) {
@@ -101,41 +147,52 @@ public final class BaseFinder {
                 navigationTarget.name, distance, (double) navigationTarget.x, (double) navigationTarget.z);
     }
 
-    private static Candidate scan(Level level, BlockPos origin) {
+    private static List<Candidate> scan(Level level, net.minecraft.world.entity.player.Player player) {
         Map<Long, Candidate> byChunk = new HashMap<>();
+        BlockPos origin = player.blockPosition();
         int radius = 48;
         int minY = Math.max(level.getMinY(), origin.getY() - 16);
         int maxY = Math.min(level.getMaxY() - 1, origin.getY() + 16);
+        Vec3 eye = player.getEyePosition();
 
         for (int x = origin.getX() - radius; x <= origin.getX() + radius; x++) {
             for (int z = origin.getZ() - radius; z <= origin.getZ() + radius; z++) {
-                // Check the chunk once per vertical column instead of once per block.
                 if (!level.hasChunkAt(new BlockPos(x, minY, z))) continue;
-
                 for (int y = minY; y <= maxY; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
                     String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
                             .getPath().toLowerCase(Locale.ROOT);
                     int weight = weight(blockId);
-                    if (weight == 0) continue;
+                    if (weight == 0 || !hasExposedFace(level, pos)) continue;
+
+                    Vec3 target = Vec3.atCenterOf(pos);
+                    BlockHitResult hit = level.clip(new ClipContext(
+                            eye, target, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player));
+                    if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(pos)) continue;
 
                     int chunkX = x >> 4;
                     int chunkZ = z >> 4;
                     long key = (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
-                    Candidate current = byChunk.computeIfAbsent(key, ignored -> new Candidate());
-                    current.score += weight;
-                    current.totalX += x * weight;
-                    current.totalY += y * weight;
-                    current.totalZ += z * weight;
-                    current.weight += weight;
+                    Candidate current = byChunk.computeIfAbsent(key, ignored -> new Candidate(chunkX, chunkZ));
+                    current.add(pos, blockId, weight);
                 }
             }
         }
 
         return byChunk.values().stream()
-                .filter(candidate -> candidate.score >= 5)
-                .max(Comparator.comparingInt(candidate -> candidate.score))
-                .orElse(null);
+                .filter(candidate -> candidate.likelihood() >= 40)
+                .sorted(Comparator.comparingInt(Candidate::likelihood).reversed())
+                .limit(12)
+                .toList();
+    }
+
+    private static boolean hasExposedFace(Level level, BlockPos pos) {
+        return level.getBlockState(pos.above()).isAir()
+                || level.getBlockState(pos.below()).isAir()
+                || level.getBlockState(pos.north()).isAir()
+                || level.getBlockState(pos.south()).isAir()
+                || level.getBlockState(pos.east()).isAir()
+                || level.getBlockState(pos.west()).isAir();
     }
 
     private static int weight(String block) {
@@ -153,15 +210,37 @@ public final class BaseFinder {
     }
 
     private static final class Candidate {
-        int score;
+        final int chunkX;
+        final int chunkZ;
         int totalX;
         int totalY;
         int totalZ;
+        int count;
         int weight;
+        final Set<String> kinds = new HashSet<>();
 
-        int x() { return totalX / Math.max(1, weight); }
-        int y() { return totalY / Math.max(1, weight); }
-        int z() { return totalZ / Math.max(1, weight); }
+        Candidate(int chunkX, int chunkZ) {
+            this.chunkX = chunkX;
+            this.chunkZ = chunkZ;
+        }
+
+        void add(BlockPos pos, String kind, int blockWeight) {
+            count++;
+            weight += blockWeight;
+            kinds.add(kind);
+            totalX += pos.getX();
+            totalY += pos.getY();
+            totalZ += pos.getZ();
+        }
+
+        int likelihood() {
+            // A deliberately conservative heuristic, not a guarantee that a player base exists.
+            return Math.min(99, count * 9 + kinds.size() * 7 + Math.max(0, weight - count) * 3);
+        }
+
+        int centerX() { return totalX / Math.max(1, count); }
+        int centerY() { return totalY / Math.max(1, count); }
+        int centerZ() { return totalZ / Math.max(1, count); }
     }
 
     private record Waypoint(String name, int x, int y, int z, int score) {}
