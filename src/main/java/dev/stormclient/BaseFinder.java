@@ -9,6 +9,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.util.ARGB;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -48,6 +55,76 @@ public final class BaseFinder {
         CURRENT_CANDIDATES.clear();
         CURRENT_CANDIDATES.addAll(scan(client.level, client.player));
         scanCooldown = 40;
+    }
+
+
+    /**
+     * Draws a thin red square at the height of visible evidence in each candidate chunk.
+     * Uses the normal depth-tested debug geometry; it is not an X-ray overlay.
+     */
+    public static void renderChunkOutlines(LevelRenderContext context) {
+        if (!StormClient.baseFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return;
+
+        Vec3 camera = context.levelState().cameraRenderState.pos;
+        PoseStack poseStack = context.poseStack();
+        poseStack.pushPose();
+        poseStack.translate(-camera.x, -camera.y, -camera.z);
+
+        int red = ARGB.colorFromFloat(0.9f, 1.0f, 0.05f, 0.05f);
+        for (Candidate candidate : CURRENT_CANDIDATES) {
+            double minX = candidate.chunkX * 16.0;
+            double minZ = candidate.chunkZ * 16.0;
+            double maxX = minX + 16.0;
+            double maxZ = minZ + 16.0;
+            double y = Math.floor(candidate.centerY()) + 1.05;
+            double thickness = 0.07;
+            double height = 0.045;
+
+            context.submitNodeCollector().submitCustomGeometry(
+                    poseStack, RenderTypes.debugFilledBox(), (pose, buffer) -> {
+                        drawFilledBox(pose, buffer,
+                                new AABB(minX, y, minZ, maxX, y + height, minZ + thickness), red);
+                        drawFilledBox(pose, buffer,
+                                new AABB(minX, y, maxZ - thickness, maxX, y + height, maxZ), red);
+                        drawFilledBox(pose, buffer,
+                                new AABB(minX, y, minZ, minX + thickness, y + height, maxZ), red);
+                        drawFilledBox(pose, buffer,
+                                new AABB(maxX - thickness, y, minZ, maxX, y + height, maxZ), red);
+                    });
+        }
+
+        poseStack.popPose();
+    }
+
+    private static void drawFilledBox(PoseStack.Pose pose,
+            com.mojang.blaze3d.vertex.VertexConsumer buffer, AABB box, int color) {
+        // Front and back faces
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        // Left and right faces
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
+        // Top and bottom faces
+        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ).setColor(color);
     }
 
     public static List<String> getOverlayLines() {
