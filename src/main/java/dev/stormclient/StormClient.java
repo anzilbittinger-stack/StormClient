@@ -3,6 +3,7 @@ package dev.stormclient;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
@@ -202,6 +203,8 @@ public final class StormClient implements ClientModInitializer {
                 originalFov = -1;
             }
         });
+
+        LevelRenderEvents.BEFORE_TRANSLUCENT_TERRAIN.register(BaseFinder::renderChunkOutlines);
 
         StormHud.register();
         LOGGER.info("StormClient initialised. Right Shift opens ClickGUI; C zooms.");
