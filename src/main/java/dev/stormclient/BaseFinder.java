@@ -56,7 +56,7 @@ public final class BaseFinder {
 
         if (centerX != queuedCenterX || centerZ != queuedCenterZ
                 || renderDistance != queuedRenderDistance || topY != queuedTopY
-                || CHUNK_QUEUE.isEmpty() || scanIndex >= CHUNK_QUEUE.size()) {
+                || CHUNK_QUEUE.isEmpty()) {
             rebuildQueue(client, centerX, centerZ, renderDistance, topY);
         }
 
