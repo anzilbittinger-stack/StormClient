@@ -32,6 +32,9 @@ public final class BaseFinder {
     private static final Set<Long> ALERTED_CHUNKS = new HashSet<>();
     private static final List<Long> CHUNK_QUEUE = new ArrayList<>();
     private static int scanIndex;
+    private static int scanColumnIndex;
+    private static Candidate activeCandidate;
+    private static final int COLUMNS_PER_TICK = 4;
     private static int queuedCenterX = Integer.MIN_VALUE;
     private static int queuedCenterZ = Integer.MIN_VALUE;
     private static int queuedRenderDistance = -1;
@@ -57,17 +60,27 @@ public final class BaseFinder {
             rebuildQueue(centerX, centerZ, renderDistance);
         }
 
-        // Scan one loaded chunk per tick so the finder does not freeze the game.
-        if (scanIndex < CHUNK_QUEUE.size()) {
-            long key = CHUNK_QUEUE.get(scanIndex++);
+        // Spread each chunk scan over multiple ticks to avoid long client-thread stalls.
+        int columnsScanned = 0;
+        while (scanIndex < CHUNK_QUEUE.size() && columnsScanned < COLUMNS_PER_TICK) {
+            long key = CHUNK_QUEUE.get(scanIndex);
             int chunkX = (int) (key >> 32);
             int chunkZ = (int) key;
-            if (scanChunk(client.level, chunkX, chunkZ, topY)) {
-                SCANNED_CHUNKS.add(key);
-                // Candidate scores are shown in the HUD; no chat API call here.
-
+            if (!scanColumn(client.level, chunkX, chunkZ, topY)) {
+                scanIndex++;
+                scanColumnIndex = 0;
+                activeCandidate = null;
+                continue;
             }
-            refreshCandidates();
+            scanColumnIndex++;
+            columnsScanned++;
+            if (scanColumnIndex >= 256) {
+                SCANNED_CHUNKS.add(key);
+                scanIndex++;
+                scanColumnIndex = 0;
+                activeCandidate = null;
+                refreshCandidates();
+            }
         }
     }
 
@@ -78,6 +91,8 @@ public final class BaseFinder {
         ALERTED_CHUNKS.clear();
         CHUNK_QUEUE.clear();
         scanIndex = 0;
+        scanColumnIndex = 0;
+        activeCandidate = null;
         queuedCenterX = Integer.MIN_VALUE;
         queuedCenterZ = Integer.MIN_VALUE;
         queuedRenderDistance = -1;
@@ -90,6 +105,8 @@ public final class BaseFinder {
         ALERTED_CHUNKS.removeIf(key -> !insideRange(key, centerX, centerZ, renderDistance));
         CHUNK_QUEUE.clear();
         scanIndex = 0;
+        scanColumnIndex = 0;
+        activeCandidate = null;
         queuedCenterX = centerX;
         queuedCenterZ = centerZ;
         queuedRenderDistance = renderDistance;
@@ -103,29 +120,28 @@ public final class BaseFinder {
         refreshCandidates();
     }
 
-    private static boolean scanChunk(Level level, int chunkX, int chunkZ, int topY) {
+    private static boolean scanColumn(Level level, int chunkX, int chunkZ, int topY) {
         int minY = level.getMinY();
         int startX = chunkX << 4;
         int startZ = chunkZ << 4;
         if (!level.hasChunkAt(new BlockPos(startX, topY, startZ))) return false;
 
+        int columnX = scanColumnIndex & 15;
+        int columnZ = scanColumnIndex >> 4;
+        int x = startX + columnX;
+        int z = startZ + columnZ;
         long key = chunkKey(chunkX, chunkZ);
-        Candidate candidate = null;
-        for (int x = startX; x < startX + 16; x++) {
-            for (int z = startZ; z < startZ + 16; z++) {
-                for (int y = minY; y <= topY; y++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
-                            .getPath().toLowerCase(Locale.ROOT);
-                    int blockWeight = weight(blockId);
-                    if (blockWeight == 0) continue;
-                    if (candidate == null) {
-                        candidate = new Candidate(chunkX, chunkZ);
-                        SCANNED_CANDIDATES.put(key, candidate);
-                    }
-                    candidate.add(blockId, blockWeight);
-                }
+        for (int y = minY; y <= topY; y++) {
+            BlockPos pos = new BlockPos(x, y, z);
+            String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
+                    .getPath().toLowerCase(Locale.ROOT);
+            int blockWeight = weight(blockId);
+            if (blockWeight == 0) continue;
+            if (activeCandidate == null) {
+                activeCandidate = new Candidate(chunkX, chunkZ);
+                SCANNED_CANDIDATES.put(key, activeCandidate);
             }
+            activeCandidate.add(blockId, blockWeight);
         }
         return true;
     }
@@ -146,7 +162,7 @@ public final class BaseFinder {
         CURRENT_CANDIDATES.addAll(SCANNED_CANDIDATES.values().stream()
                 .filter(candidate -> candidate.score() >= 22)
                 .sorted(Comparator.comparingInt(Candidate::score).reversed())
-                .limit(64)
+                .limit(16)
                 .toList());
     }
 
@@ -221,9 +237,9 @@ public final class BaseFinder {
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ).setColor(color);
-        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.maxZ);
-        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.minZ);
-        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ).setColor(color);
     }
 
     public static List<String> getOverlayLines() {
