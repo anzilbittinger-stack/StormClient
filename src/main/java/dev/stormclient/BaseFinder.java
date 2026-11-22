@@ -49,8 +49,8 @@ public final class BaseFinder {
         if (client.level.getGameTime() == lastWorldTime) return;
         lastWorldTime = client.level.getGameTime();
 
-        int centerX = client.player.chunkPosition().x;
-        int centerZ = client.player.chunkPosition().z;
+        int centerX = client.player.chunkPosition().x();
+        int centerZ = client.player.chunkPosition().z();
         int renderDistance = Math.max(2, client.options.renderDistance().get());
         int topY = Math.min(client.level.getMaxY() - 1, client.player.blockPosition().getY());
 
@@ -229,6 +229,8 @@ public final class BaseFinder {
     }
 
     private static int weight(String block) {
+        // A visible mob spawner is unusually strong evidence of an underground structure.
+        if (block.equals("spawner")) return 10;
         if (block.equals("ender_chest") || block.equals("chest") || block.equals("trapped_chest")
                 || block.equals("barrel") || block.endsWith("_shulker_box")) return 3;
         if (block.equals("crafting_table") || block.equals("furnace") || block.equals("smoker")
