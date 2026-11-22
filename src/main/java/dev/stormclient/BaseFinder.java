@@ -19,7 +19,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
@@ -31,16 +30,14 @@ import net.minecraft.world.phys.Vec3;
  * It deliberately does not inspect concealed storage through solid terrain.
  */
 public final class BaseFinder {
-    private static final List<Waypoint> WAYPOINTS = new ArrayList<>();
     private static final List<Candidate> CURRENT_CANDIDATES = new ArrayList<>();
-    private static Waypoint navigationTarget;
     private static int scanCooldown;
     private static long lastWorldTime = Long.MIN_VALUE;
 
     private BaseFinder() {}
 
     public static void tick(Minecraft client) {
-        if (!StormClient.baseFinderEnabled || client.player == null || client.level == null) {
+        if (!StormClient.chunkFinderEnabled || client.player == null || client.level == null) {
             CURRENT_CANDIDATES.clear();
             scanCooldown = 0;
             lastWorldTime = Long.MIN_VALUE;
@@ -59,40 +56,45 @@ public final class BaseFinder {
 
 
     /**
-     * Draws a thin red square at the height of visible evidence in each candidate chunk.
-     * Uses the normal depth-tested debug geometry; it is not an X-ray overlay.
+     * Draws a full-height 3D red frame around each candidate chunk.
+     * The frame runs from the world's top build limit to its bottom build limit.
      */
     public static void renderChunkOutlines(LevelRenderContext context) {
-        if (!StormClient.baseFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return;
-
+        if (!StormClient.chunkFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return;
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return;
         Vec3 camera = context.levelState().cameraRenderState.pos;
         PoseStack poseStack = context.poseStack();
         poseStack.pushPose();
         poseStack.translate(-camera.x, -camera.y, -camera.z);
-
-        int red = ARGB.colorFromFloat(0.9f, 1.0f, 0.05f, 0.05f);
+        int red = ARGB.colorFromFloat(0.92f, 1.0f, 0.025f, 0.025f);
+        double minY = client.level.getMinY();
+        double maxY = client.level.getMaxY();
+        double t = 0.075;
         for (Candidate candidate : CURRENT_CANDIDATES) {
             double minX = candidate.chunkX * 16.0;
             double minZ = candidate.chunkZ * 16.0;
             double maxX = minX + 16.0;
             double maxZ = minZ + 16.0;
-            double y = Math.floor(candidate.centerY()) + 1.05;
-            double thickness = 0.07;
-            double height = 0.045;
-
             context.submitNodeCollector().submitCustomGeometry(
                     poseStack, RenderTypes.debugFilledBox(), (pose, buffer) -> {
-                        drawFilledBox(pose, buffer,
-                                new AABB(minX, y, minZ, maxX, y + height, minZ + thickness), red);
-                        drawFilledBox(pose, buffer,
-                                new AABB(minX, y, maxZ - thickness, maxX, y + height, maxZ), red);
-                        drawFilledBox(pose, buffer,
-                                new AABB(minX, y, minZ, minX + thickness, y + height, maxZ), red);
-                        drawFilledBox(pose, buffer,
-                                new AABB(maxX - thickness, y, minZ, maxX, y + height, maxZ), red);
+                        // Four full-height vertical corner edges.
+                        drawFilledBox(pose, buffer, new AABB(minX, minY, minZ, minX + t, maxY, minZ + t), red);
+                        drawFilledBox(pose, buffer, new AABB(maxX - t, minY, minZ, maxX, maxY, minZ + t), red);
+                        drawFilledBox(pose, buffer, new AABB(minX, minY, maxZ - t, minX + t, maxY, maxZ), red);
+                        drawFilledBox(pose, buffer, new AABB(maxX - t, minY, maxZ - t, maxX, maxY, maxZ), red);
+                        // Top perimeter.
+                        drawFilledBox(pose, buffer, new AABB(minX, maxY - t, minZ, maxX, maxY, minZ + t), red);
+                        drawFilledBox(pose, buffer, new AABB(minX, maxY - t, maxZ - t, maxX, maxY, maxZ), red);
+                        drawFilledBox(pose, buffer, new AABB(minX, maxY - t, minZ, minX + t, maxY, maxZ), red);
+                        drawFilledBox(pose, buffer, new AABB(maxX - t, maxY - t, minZ, maxX, maxY, maxZ), red);
+                        // Bottom perimeter, at the bedrock/build-limit end.
+                        drawFilledBox(pose, buffer, new AABB(minX, minY, minZ, maxX, minY + t, minZ + t), red);
+                        drawFilledBox(pose, buffer, new AABB(minX, minY, maxZ - t, maxX, minY + t, maxZ), red);
+                        drawFilledBox(pose, buffer, new AABB(minX, minY, minZ, minX + t, minY + t, maxZ), red);
+                        drawFilledBox(pose, buffer, new AABB(maxX - t, minY, minZ, maxX, minY + t, maxZ), red);
                     });
         }
-
         poseStack.popPose();
     }
 
@@ -128,100 +130,15 @@ public final class BaseFinder {
     }
 
     public static List<String> getOverlayLines() {
-        if (!StormClient.baseFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return List.of();
+        if (!StormClient.chunkFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return List.of();
         List<String> lines = new ArrayList<>();
         int count = Math.min(5, CURRENT_CANDIDATES.size());
         for (int i = 0; i < count; i++) {
             Candidate candidate = CURRENT_CANDIDATES.get(i);
-            lines.add(String.format(Locale.ROOT, "BASE: %d%% | Chunk %d, %d",
+            lines.add(String.format(Locale.ROOT, "CHUNK FINDER: %d%% | Chunk %d, %d",
                     candidate.likelihood(), candidate.chunkX, candidate.chunkZ));
         }
         return lines;
-    }
-
-    public static void handleChatCommand(String message) {
-        Minecraft client = Minecraft.getInstance();
-        if (client.player == null || client.level == null) return;
-
-        String command = message.toLowerCase(Locale.ROOT).trim();
-        if (command.equals("#base clear")) {
-            WAYPOINTS.clear();
-            CURRENT_CANDIDATES.clear();
-            navigationTarget = null;
-            tell("Cleared saved base markers.");
-            return;
-        }
-        if (command.startsWith("#base tp")) {
-            if (WAYPOINTS.isEmpty()) {
-                tell("No saved base markers. Run #base first.");
-                return;
-            }
-            int index = 0;
-            String[] parts = command.split("\\s+");
-            if (parts.length >= 3) {
-                try { index = Integer.parseInt(parts[2]) - 1; }
-                catch (NumberFormatException ignored) {
-                    tell("Usage: #base tp [number]");
-                    return;
-                }
-            }
-            if (index < 0 || index >= WAYPOINTS.size()) {
-                tell("That base number does not exist. Use #base list.");
-                return;
-            }
-            navigationTarget = WAYPOINTS.get(index);
-            tell("Navigation target set to " + navigationTarget.name + " at "
-                    + navigationTarget.x + " " + navigationTarget.y + " " + navigationTarget.z
-                    + ". Follow the coordinates in your HUD; this does not teleport you.");
-            return;
-        }
-        if (command.equals("#base list")) {
-            if (WAYPOINTS.isEmpty()) {
-                tell("No saved bases. Walk around while Base Finder is enabled, then use #base list.");
-                return;
-            }
-            tell("Saved visible base markers:");
-            for (int i = 0; i < WAYPOINTS.size(); i++) {
-                Waypoint point = WAYPOINTS.get(i);
-                tell((i + 1) + ". " + point.name + " at " + point.x + " " + point.y + " " + point.z
-                        + " | likelihood " + point.score + "%");
-            }
-            return;
-        }
-
-        if (!command.equals("#base")) return;
-        if (!StormClient.baseFinderEnabled) {
-            tell("Base Finder is OFF. Enable it in StormClient > Utility.");
-            return;
-        }
-
-        if (CURRENT_CANDIDATES.isEmpty()) {
-            tell("No likely visible base activity yet. Keep exploring; it rescans automatically.");
-            return;
-        }
-
-        WAYPOINTS.clear();
-        int index = 1;
-        for (Candidate candidate : CURRENT_CANDIDATES) {
-            String name = "Base " + index++;
-            int x = candidate.centerX();
-            int y = candidate.centerY();
-            int z = candidate.centerZ();
-            WAYPOINTS.add(new Waypoint(name, x, y, z, candidate.likelihood()));
-            tell(name + ": " + candidate.likelihood() + "% likely | chunk "
-                    + candidate.chunkX + ", " + candidate.chunkZ + " | approx "
-                    + x + " " + y + " " + z);
-        }
-        tell("Markers are based only on base-like blocks visible to your client. Use #base tp [number] to navigate.");
-    }
-
-    public static String getNavigationText(Minecraft client) {
-        if (navigationTarget == null || client.player == null) return null;
-        double dx = navigationTarget.x + 0.5 - client.player.getX();
-        double dz = navigationTarget.z + 0.5 - client.player.getZ();
-        double distance = Math.sqrt(dx * dx + dz * dz);
-        return String.format(Locale.ROOT, "Base waypoint: %s | %.0fm | X %.0f Z %.0f",
-                navigationTarget.name, distance, (double) navigationTarget.x, (double) navigationTarget.z);
     }
 
     private static List<Candidate> scan(Level level, net.minecraft.world.entity.player.Player player) {
@@ -320,5 +237,4 @@ public final class BaseFinder {
         int centerZ() { return totalZ / Math.max(1, count); }
     }
 
-    private record Waypoint(String name, int x, int y, int z, int score) {}
 }
