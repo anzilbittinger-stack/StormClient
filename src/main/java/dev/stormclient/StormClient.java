@@ -92,6 +92,8 @@ public final class StormClient implements ClientModInitializer {
                 return;
             }
 
+            BaseFinder.tick(client);
+
             if (autoTotemCooldown > 0) autoTotemCooldown--;
             if (autoArmorCooldown > 0) autoArmorCooldown--;
             if (autoArmorEnabled && autoArmorCooldown == 0
