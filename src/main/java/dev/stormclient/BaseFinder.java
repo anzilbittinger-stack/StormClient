@@ -10,68 +10,151 @@ import java.util.Map;
 import java.util.Set;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.util.ARGB;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
-
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
+import net.minecraft.util.ARGB;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Heuristic finder for base-like blocks that are exposed to the player's normal view.
- * It deliberately does not inspect concealed storage through solid terrain.
+ * Finds clusters of base-like blocks that are exposed to the player's normal view.
+ * It never searches concealed storage through solid terrain.
  */
 public final class BaseFinder {
     private static final List<Candidate> CURRENT_CANDIDATES = new ArrayList<>();
-    private static int scanCooldown;
+    private static final Map<Long, Candidate> SCANNED_CANDIDATES = new HashMap<>();
+    private static final List<Long> CHUNK_QUEUE = new ArrayList<>();
+    private static int scanIndex;
+    private static int queuedCenterX = Integer.MIN_VALUE;
+    private static int queuedCenterZ = Integer.MIN_VALUE;
+    private static int queuedRenderDistance = -1;
+    private static int queuedTopY;
     private static long lastWorldTime = Long.MIN_VALUE;
 
     private BaseFinder() {}
 
     public static void tick(Minecraft client) {
         if (!StormClient.chunkFinderEnabled || client.player == null || client.level == null) {
-            CURRENT_CANDIDATES.clear();
-            scanCooldown = 0;
-            lastWorldTime = Long.MIN_VALUE;
+            reset();
             return;
         }
         if (client.level.getGameTime() == lastWorldTime) return;
         lastWorldTime = client.level.getGameTime();
-        if (scanCooldown > 0) {
-            scanCooldown--;
-            return;
+
+        int centerX = client.player.chunkPosition().x;
+        int centerZ = client.player.chunkPosition().z;
+        int renderDistance = Math.max(2, client.options.renderDistance().get());
+        int topY = Math.min(client.level.getMaxY() - 1, client.player.blockPosition().getY());
+
+        if (centerX != queuedCenterX || centerZ != queuedCenterZ
+                || renderDistance != queuedRenderDistance || topY != queuedTopY
+                || CHUNK_QUEUE.isEmpty() || scanIndex >= CHUNK_QUEUE.size()) {
+            rebuildQueue(client, centerX, centerZ, renderDistance, topY);
         }
-        CURRENT_CANDIDATES.clear();
-        CURRENT_CANDIDATES.addAll(scan(client.level, client.player));
-        scanCooldown = 40;
+
+        // Scan one already-loaded chunk per client tick to avoid freezing the game.
+        if (scanIndex < CHUNK_QUEUE.size()) {
+            long key = CHUNK_QUEUE.get(scanIndex++);
+            int chunkX = (int) (key >> 32);
+            int chunkZ = (int) key;
+            scanChunk(client.level, client.player, chunkX, chunkZ, topY);
+            refreshCandidates();
+        }
     }
 
+    private static void reset() {
+        CURRENT_CANDIDATES.clear();
+        SCANNED_CANDIDATES.clear();
+        CHUNK_QUEUE.clear();
+        scanIndex = 0;
+        queuedCenterX = Integer.MIN_VALUE;
+        queuedCenterZ = Integer.MIN_VALUE;
+        queuedRenderDistance = -1;
+        queuedTopY = 0;
+        lastWorldTime = Long.MIN_VALUE;
+    }
 
-    /**
-     * Draws a full-height 3D red frame around each candidate chunk.
-     * The frame runs from the world's top build limit to its bottom build limit.
-     */
+    private static void rebuildQueue(Minecraft client, int centerX, int centerZ,
+            int renderDistance, int topY) {
+        CHUNK_QUEUE.clear();
+        SCANNED_CANDIDATES.clear();
+        CURRENT_CANDIDATES.clear();
+        scanIndex = 0;
+        queuedCenterX = centerX;
+        queuedCenterZ = centerZ;
+        queuedRenderDistance = renderDistance;
+        queuedTopY = topY;
+
+        // Include every chunk coordinate in the configured render-distance square.
+        for (int x = centerX - renderDistance; x <= centerX + renderDistance; x++) {
+            for (int z = centerZ - renderDistance; z <= centerZ + renderDistance; z++) {
+                CHUNK_QUEUE.add((((long) x) << 32) | (z & 0xffffffffL));
+            }
+        }
+    }
+
+    private static void scanChunk(Level level, Player player, int chunkX, int chunkZ, int topY) {
+        int minY = level.getMinY();
+        int startX = chunkX << 4;
+        int startZ = chunkZ << 4;
+        if (!level.hasChunkAt(new BlockPos(startX, topY, startZ))) return;
+
+        Vec3 eye = player.getEyePosition();
+        for (int x = startX; x < startX + 16; x++) {
+            for (int z = startZ; z < startZ + 16; z++) {
+                for (int y = minY; y <= topY; y++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
+                            .getPath().toLowerCase(Locale.ROOT);
+                    int blockWeight = weight(blockId);
+                    if (blockWeight == 0 || !hasExposedFace(level, pos)) continue;
+
+                    Vec3 target = Vec3.atCenterOf(pos);
+                    BlockHitResult hit = level.clip(new ClipContext(
+                            eye, target, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player));
+                    if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(pos)) continue;
+
+                    long key = (((long) chunkX) << 32) | (chunkZ & 0xffffffffL);
+                    Candidate candidate = SCANNED_CANDIDATES.computeIfAbsent(
+                            key, ignored -> new Candidate(chunkX, chunkZ));
+                    candidate.add(pos, blockId, blockWeight);
+                }
+            }
+        }
+    }
+
+    private static void refreshCandidates() {
+        CURRENT_CANDIDATES.clear();
+        CURRENT_CANDIDATES.addAll(SCANNED_CANDIDATES.values().stream()
+                .filter(candidate -> candidate.score() > 10)
+                .sorted(Comparator.comparingInt(Candidate::score).reversed())
+                .limit(64)
+                .toList());
+    }
+
+    /** Draws visible red chunk frames from the player's height down to the bottom build limit. */
     public static void renderChunkOutlines(LevelRenderContext context) {
         if (!StormClient.chunkFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return;
         Minecraft client = Minecraft.getInstance();
-        if (client.level == null) return;
+        if (client.level == null || client.player == null) return;
+
         Vec3 camera = context.levelState().cameraRenderState.pos;
         PoseStack poseStack = context.poseStack();
         poseStack.pushPose();
         poseStack.translate(-camera.x, -camera.y, -camera.z);
         int red = ARGB.colorFromFloat(0.92f, 1.0f, 0.025f, 0.025f);
         double minY = client.level.getMinY();
-        double maxY = client.level.getMaxY();
+        double maxY = Math.min(client.level.getMaxY(), client.player.blockPosition().getY() + 1.0);
         double t = 0.075;
+
         for (Candidate candidate : CURRENT_CANDIDATES) {
             double minX = candidate.chunkX * 16.0;
             double minZ = candidate.chunkZ * 16.0;
@@ -79,17 +162,14 @@ public final class BaseFinder {
             double maxZ = minZ + 16.0;
             context.submitNodeCollector().submitCustomGeometry(
                     poseStack, RenderTypes.debugFilledBox(), (pose, buffer) -> {
-                        // Four full-height vertical corner edges.
                         drawFilledBox(pose, buffer, new AABB(minX, minY, minZ, minX + t, maxY, minZ + t), red);
                         drawFilledBox(pose, buffer, new AABB(maxX - t, minY, minZ, maxX, maxY, minZ + t), red);
                         drawFilledBox(pose, buffer, new AABB(minX, minY, maxZ - t, minX + t, maxY, maxZ), red);
                         drawFilledBox(pose, buffer, new AABB(maxX - t, minY, maxZ - t, maxX, maxY, maxZ), red);
-                        // Top perimeter.
                         drawFilledBox(pose, buffer, new AABB(minX, maxY - t, minZ, maxX, maxY, minZ + t), red);
                         drawFilledBox(pose, buffer, new AABB(minX, maxY - t, maxZ - t, maxX, maxY, maxZ), red);
                         drawFilledBox(pose, buffer, new AABB(minX, maxY - t, minZ, minX + t, maxY, maxZ), red);
                         drawFilledBox(pose, buffer, new AABB(maxX - t, maxY - t, minZ, maxX, maxY, maxZ), red);
-                        // Bottom perimeter, at the bedrock/build-limit end.
                         drawFilledBox(pose, buffer, new AABB(minX, minY, minZ, maxX, minY + t, minZ + t), red);
                         drawFilledBox(pose, buffer, new AABB(minX, minY, maxZ - t, maxX, minY + t, maxZ), red);
                         drawFilledBox(pose, buffer, new AABB(minX, minY, minZ, minX + t, minY + t, maxZ), red);
@@ -101,7 +181,6 @@ public final class BaseFinder {
 
     private static void drawFilledBox(PoseStack.Pose pose,
             com.mojang.blaze3d.vertex.VertexConsumer buffer, AABB box, int color) {
-        // Front and back faces
         buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.minZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
@@ -110,7 +189,6 @@ public final class BaseFinder {
         buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
-        // Left and right faces
         buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ).setColor(color);
         buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.minZ).setColor(color);
@@ -119,7 +197,6 @@ public final class BaseFinder {
         buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
-        // Top and bottom faces
         buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.minZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
@@ -133,52 +210,13 @@ public final class BaseFinder {
     public static List<String> getOverlayLines() {
         if (!StormClient.chunkFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return List.of();
         List<String> lines = new ArrayList<>();
-        int count = Math.min(5, CURRENT_CANDIDATES.size());
+        int count = Math.min(8, CURRENT_CANDIDATES.size());
         for (int i = 0; i < count; i++) {
             Candidate candidate = CURRENT_CANDIDATES.get(i);
-            lines.add(String.format(Locale.ROOT, "CHUNK FINDER: %d%% | Chunk %d, %d",
-                    candidate.likelihood(), candidate.chunkX, candidate.chunkZ));
+            lines.add(String.format(Locale.ROOT, "BASE %d%% | Chunk %d, %d",
+                    candidate.score(), candidate.chunkX, candidate.chunkZ));
         }
         return lines;
-    }
-
-    private static List<Candidate> scan(Level level, net.minecraft.world.entity.player.Player player) {
-        Map<Long, Candidate> byChunk = new HashMap<>();
-        BlockPos origin = player.blockPosition();
-        int radius = 48;
-        int minY = Math.max(level.getMinY(), origin.getY() - 16);
-        int maxY = Math.min(level.getMaxY() - 1, origin.getY() + 16);
-        Vec3 eye = player.getEyePosition();
-
-        for (int x = origin.getX() - radius; x <= origin.getX() + radius; x++) {
-            for (int z = origin.getZ() - radius; z <= origin.getZ() + radius; z++) {
-                if (!level.hasChunkAt(new BlockPos(x, minY, z))) continue;
-                for (int y = minY; y <= maxY; y++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
-                            .getPath().toLowerCase(Locale.ROOT);
-                    int weight = weight(blockId);
-                    if (weight == 0 || !hasExposedFace(level, pos)) continue;
-
-                    Vec3 target = Vec3.atCenterOf(pos);
-                    BlockHitResult hit = level.clip(new ClipContext(
-                            eye, target, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player));
-                    if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(pos)) continue;
-
-                    int chunkX = x >> 4;
-                    int chunkZ = z >> 4;
-                    long key = (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
-                    Candidate current = byChunk.computeIfAbsent(key, ignored -> new Candidate(chunkX, chunkZ));
-                    current.add(pos, blockId, weight);
-                }
-            }
-        }
-
-        return byChunk.values().stream()
-                .filter(candidate -> candidate.likelihood() >= 40)
-                .sorted(Comparator.comparingInt(Candidate::likelihood).reversed())
-                .limit(12)
-                .toList();
     }
 
     private static boolean hasExposedFace(Level level, BlockPos pos) {
@@ -200,16 +238,9 @@ public final class BaseFinder {
         return 0;
     }
 
-    private static void tell(String message) {
-        Minecraft.getInstance().showDebugChat(Component.literal("[StormClient] " + message));
-    }
-
     private static final class Candidate {
         final int chunkX;
         final int chunkZ;
-        int totalX;
-        int totalY;
-        int totalZ;
         int count;
         int weight;
         final Set<String> kinds = new HashSet<>();
@@ -223,19 +254,11 @@ public final class BaseFinder {
             count++;
             weight += blockWeight;
             kinds.add(kind);
-            totalX += pos.getX();
-            totalY += pos.getY();
-            totalZ += pos.getZ();
         }
 
-        int likelihood() {
-            // A deliberately conservative heuristic, not a guarantee that a player base exists.
+        int score() {
+            // Evidence score, not a statistically calibrated probability.
             return Math.min(99, count * 9 + kinds.size() * 7 + Math.max(0, weight - count) * 3);
         }
-
-        int centerX() { return totalX / Math.max(1, count); }
-        int centerY() { return totalY / Math.max(1, count); }
-        int centerZ() { return totalZ / Math.max(1, count); }
     }
-
 }
