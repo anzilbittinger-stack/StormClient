@@ -66,7 +66,7 @@ public final class BaseFinder {
             if (scanChunk(client.level, chunkX, chunkZ, topY)) {
                 SCANNED_CHUNKS.add(key);
                 Candidate candidate = SCANNED_CANDIDATES.get(key);
-                if (candidate != null && candidate.score() >= 55 && ALERTED_CHUNKS.add(key)) {
+                if (candidate != null && candidate.score() >= 70 && ALERTED_CHUNKS.add(key)) {
                     client.player.displayClientMessage(Component.literal(String.format(Locale.ROOT,
                             "[StormClient] HIGH BASE LIKELIHOOD: %d/100 in chunk %d, %d (%d storage blocks, %d artificial lights).",
                             candidate.score(), chunkX, chunkZ, candidate.storageCount, candidate.lightCount)), false);
@@ -222,10 +222,10 @@ public final class BaseFinder {
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
         buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.minZ).setColor(color);
-        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ);
-        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ);
-        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.maxZ);
-        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.minZ).setColor(color);
+        buffer.addVertex(pose, (float) box.maxX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.maxY, (float) box.maxZ).setColor(color);
+        buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.maxZ).setColor(color);
         buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.maxZ);
         buffer.addVertex(pose, (float) box.maxX, (float) box.minY, (float) box.minZ);
         buffer.addVertex(pose, (float) box.minX, (float) box.minY, (float) box.minZ);
