@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -20,7 +19,7 @@ public final class StormClient implements ClientModInitializer {
     public static boolean airJumpEnabled = true;
     public static boolean fullbrightEnabled = false;
     public static boolean autoSprintEnabled = false;
-    public static boolean baseFinderEnabled = true;
+    public static boolean chunkFinderEnabled = false;
     public static boolean elytraAssistEnabled = false;
     public static boolean hudFpsEnabled = true;
     public static boolean hudCoordinatesEnabled = true;
@@ -67,16 +66,6 @@ public final class StormClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_C,
                 CATEGORY
         ));
-
-        ClientSendMessageEvents.ALLOW_CHAT.register(message -> {
-            if (message.equalsIgnoreCase("#base") || message.equalsIgnoreCase("#base list")
-                    || message.equalsIgnoreCase("#base clear") || message.equalsIgnoreCase("#base tp")
-                    || message.toLowerCase(java.util.Locale.ROOT).startsWith("#base tp ")) {
-                Minecraft.getInstance().execute(() -> BaseFinder.handleChatCommand(message));
-                return false;
-            }
-            return true;
-        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openGuiKey.consumeClick()) {
