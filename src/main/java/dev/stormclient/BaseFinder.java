@@ -17,11 +17,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -115,7 +112,6 @@ public final class BaseFinder {
         int startZ = chunkZ << 4;
         if (!level.hasChunkAt(new BlockPos(startX, topY, startZ))) return false;
 
-        Vec3 eye = player.getEyePosition();
         for (int x = startX; x < startX + 16; x++) {
             for (int z = startZ; z < startZ + 16; z++) {
                 for (int y = minY; y <= topY; y++) {
@@ -123,12 +119,7 @@ public final class BaseFinder {
                     String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
                             .getPath().toLowerCase(Locale.ROOT);
                     int blockWeight = weight(blockId);
-                    if (blockWeight == 0 || !hasExposedFace(level, pos)) continue;
-
-                    Vec3 target = Vec3.atCenterOf(pos);
-                    BlockHitResult hit = level.clip(new ClipContext(
-                            eye, target, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player));
-                    if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(pos)) continue;
+                    if (blockWeight == 0) continue;
 
                     long key = (((long) chunkX) << 32) | (chunkZ & 0xffffffffL);
                     Candidate candidate = SCANNED_CANDIDATES.computeIfAbsent(
@@ -224,24 +215,21 @@ public final class BaseFinder {
     }
 
     public static List<String> getOverlayLines() {
-        if (!StormClient.chunkFinderEnabled || CURRENT_CANDIDATES.isEmpty()) return List.of();
+        if (!StormClient.chunkFinderEnabled) return List.of();
         List<String> lines = new ArrayList<>();
-        int count = Math.min(8, CURRENT_CANDIDATES.size());
+        int total = SCANNED_CHUNKS.size() + Math.max(0, CHUNK_QUEUE.size() - scanIndex);
+        int done = SCANNED_CHUNKS.size() + scanIndex;
+        String state = scanIndex < CHUNK_QUEUE.size() ? "SCANNING" : "SCAN COMPLETE";
+        lines.add(String.format(Locale.ROOT, "BASE FINDER: %s | %d / %d chunks",
+                state, Math.min(done, total), total));
+        lines.add(String.format(Locale.ROOT, "BASE CANDIDATES: %d", CURRENT_CANDIDATES.size()));
+        int count = Math.min(6, CURRENT_CANDIDATES.size());
         for (int i = 0; i < count; i++) {
             Candidate candidate = CURRENT_CANDIDATES.get(i);
             lines.add(String.format(Locale.ROOT, "BASE %d%% | Chunk %d, %d",
                     candidate.score(), candidate.chunkX, candidate.chunkZ));
         }
         return lines;
-    }
-
-    private static boolean hasExposedFace(Level level, BlockPos pos) {
-        return level.getBlockState(pos.above()).isAir()
-                || level.getBlockState(pos.below()).isAir()
-                || level.getBlockState(pos.north()).isAir()
-                || level.getBlockState(pos.south()).isAir()
-                || level.getBlockState(pos.east()).isAir()
-                || level.getBlockState(pos.west()).isAir();
     }
 
     private static int weight(String block) {
