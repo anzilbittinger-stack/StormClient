@@ -146,6 +146,10 @@ public final class StormHud {
             draw(graphics, baseNavigation, x, y);
             y += line;
         }
+        for (String baseLine : BaseFinder.getOverlayLines()) {
+            draw(graphics, baseLine, x, y, 0xFFFF4040);
+            y += line;
+        }
         if (StormClient.hudMaceEnabled) {
             String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM
                     .getKey(client.player.getMainHandItem().getItem()).getPath();
@@ -160,6 +164,10 @@ public final class StormHud {
     }
 
     private static void draw(GuiGraphicsExtractor graphics, String text, int x, int y) {
-        graphics.text(Minecraft.getInstance().font, Component.literal(text), x, y, 0xFFF2F5FA, true);
+        draw(graphics, text, x, y, 0xFFF2F5FA);
+    }
+
+    private static void draw(GuiGraphicsExtractor graphics, String text, int x, int y, int color) {
+        graphics.text(Minecraft.getInstance().font, Component.literal(text), x, y, color, true);
     }
 }
