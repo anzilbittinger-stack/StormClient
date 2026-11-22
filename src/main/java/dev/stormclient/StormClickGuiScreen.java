@@ -79,7 +79,10 @@ public final class StormClickGuiScreen extends Screen {
             }
             case WORLD -> all.add(entry("Chunk Finder", "Automatically marks suspicious chunks with full-height 3D frames",
                     () -> StormClient.chunkFinderEnabled, () -> StormClient.chunkFinderEnabled = !StormClient.chunkFinderEnabled));
-            case UTILITY -> { }
+            case UTILITY -> {
+                all.add(entry("Market Bot", "Auto-buys qualifying AH listings and relists flips on Donut-style servers",
+                        () -> StormClient.marketBotEnabled, () -> StormClient.marketBotEnabled = !StormClient.marketBotEnabled));
+            }
         }
         if (!search.isBlank()) {
             String query = search.toLowerCase(Locale.ROOT);
@@ -214,7 +217,7 @@ public final class StormClickGuiScreen extends Screen {
                     contentX, y + 320, 0xFF7F91A8, false);
         }
 
-        g.text(font, "RIGHT SHIFT: menu     C: zoom     ESC: close",
+        if (tab == Tab.MODULES && category == Category.UTILITY) {\n            g.text(font, "Market Bot: " + MarketBot.getStatus(), contentX, y + 334, 0xFFFFD36A, false);\n        }\n\n        g.text(font, "RIGHT SHIFT: menu     C: zoom     ESC: close",
                 x + 16, y + PANEL_H - 17, 0xFF7F91A8, false);
     }
 
