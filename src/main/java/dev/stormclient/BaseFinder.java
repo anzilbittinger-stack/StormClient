@@ -67,9 +67,9 @@ public final class BaseFinder {
                 SCANNED_CHUNKS.add(key);
                 Candidate candidate = SCANNED_CANDIDATES.get(key);
                 if (candidate != null && candidate.score() >= 70 && ALERTED_CHUNKS.add(key)) {
-                    client.player.displayClientMessage(Component.literal(String.format(Locale.ROOT,
+                    client.gui.getChat().addMessage(Component.literal(String.format(Locale.ROOT,
                             "[StormClient] HIGH BASE LIKELIHOOD: %d/100 in chunk %d, %d (%d storage blocks, %d artificial lights).",
-                            candidate.score(), chunkX, chunkZ, candidate.storageCount, candidate.lightCount)), false);
+                            candidate.score(), chunkX, chunkZ, candidate.storageCount, candidate.lightCount)));
                 }
             }
             refreshCandidates();
