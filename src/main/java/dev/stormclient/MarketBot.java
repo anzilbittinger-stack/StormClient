@@ -53,16 +53,28 @@ public final class MarketBot {
         if (actionCooldown > 0) actionCooldown--;
         if (refreshTicks > 0) refreshTicks--;
 
+        if (waitingForSale && actionCooldown == 0) {
+            waitingForSale = false;
+            status = "Sale submitted; resuming market scan";
+            refreshTicks = 0;
+        }
+
         if (client.screen instanceof AbstractContainerScreen<?> screen) {
             String title = screen.getTitle().getString().toLowerCase(Locale.ROOT);
+            if (isConfirmationTitle(title)) {
+                handleConfirmation(client);
+                return;
+            }
             if (isAuctionTitle(title)) {
+                if (waitingForPurchase && actionCooldown == 0) {
+                    if (tryFindBoughtItem(client)) return;
+                    status = "Waiting for purchased item...";
+                    actionCooldown = 20;
+                    return;
+                }
                 if (!waitingForPurchase && !waitingForSale && actionCooldown == 0) {
                     scanAuction(client);
                 }
-                return;
-            }
-            if (isConfirmationTitle(title)) {
-                handleConfirmation(client);
                 return;
             }
         }
@@ -70,12 +82,6 @@ public final class MarketBot {
         if (waitingForPurchase && actionCooldown == 0) {
             if (tryFindBoughtItem(client)) return;
             status = "Waiting for purchased item...";
-            actionCooldown = 20;
-            return;
-        }
-
-        if (waitingForSale && actionCooldown == 0) {
-            status = "Waiting for sale confirmation...";
             actionCooldown = 20;
             return;
         }
@@ -134,7 +140,11 @@ public final class MarketBot {
         if (best == null) {
             status = "Scanning listings — no qualifying flip on this page";
             actionCooldown = 20;
-            if (refreshTicks == 0) refreshTicks = 40;
+            if (refreshTicks == 0) {
+                client.player.connection.sendCommand("ah");
+                refreshTicks = REFRESH_TICKS;
+                actionCooldown = 30;
+            }
             return;
         }
 
@@ -168,12 +178,20 @@ public final class MarketBot {
     }
 
     private static boolean tryFindBoughtItem(Minecraft client) {
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = client.player.getInventory().getItem(i);
+        var inventory = client.player.getInventory();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
             if (stack.isEmpty()) continue;
             String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             if (!id.equals(pendingItemId)) continue;
-            client.player.getInventory().setSelectedSlot(i);
+            if (i >= 9) {
+                int menuSlot = i;
+                clickSwapToHotbar(client, menuSlot, 8);
+                status = "Moving purchased item to hotbar...";
+                actionCooldown = 8;
+                return true;
+            }
+            inventory.setSelectedSlot(i);
             client.player.connection.sendCommand("ah sell " + formatCommandPrice(pendingSalePrice));
             waitingForPurchase = false;
             waitingForSale = true;
@@ -182,6 +200,17 @@ public final class MarketBot {
             return true;
         }
         return false;
+    }
+
+    private static void clickSwapToHotbar(Minecraft client, int slot, int hotbarButton) {
+        if (client.gameMode == null || client.player == null) return;
+        client.gameMode.handleContainerInput(
+                client.player.containerMenu.containerId,
+                slot,
+                hotbarButton,
+                ContainerInput.SWAP,
+                client.player
+        );
     }
 
     private static void clickSlot(Minecraft client, int slot) {
