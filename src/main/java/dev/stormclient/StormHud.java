@@ -141,11 +141,6 @@ public final class StormHud {
                 if (++shown >= 5) break;
             }
         }
-        String baseNavigation = BaseFinder.getNavigationText(client);
-        if (baseNavigation != null) {
-            draw(graphics, baseNavigation, x, y);
-            y += line;
-        }
         for (String baseLine : BaseFinder.getOverlayLines()) {
             draw(graphics, baseLine, x, y, 0xFFFF4040);
             y += line;
