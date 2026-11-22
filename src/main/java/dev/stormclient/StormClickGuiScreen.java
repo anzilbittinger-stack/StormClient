@@ -218,7 +218,22 @@ public final class StormClickGuiScreen extends Screen {
         }
 
         if (tab == Tab.MODULES && category == Category.UTILITY) {
-            g.text(font, "Market Bot: " + MarketBot.getStatus(), contentX, y + 334, 0xFFFFD36A, false);
+            int settingsY = y + 139;
+            g.fill(contentX, settingsY, x + PANEL_W - 14, settingsY + 27, 0x88303E52);
+            g.text(font, "Starting budget: $" + MarketBot.getBudgetLabel(),
+                    contentX + 8, settingsY + 5, 0xFFF2F5FA, true);
+            g.text(font, "CLICK TO CHANGE", x + PANEL_W - 111, settingsY + 15, 0xFF72B8FF, false);
+
+            int reinvestY = settingsY + 35;
+            g.fill(contentX, reinvestY, x + PANEL_W - 14, reinvestY + 27, 0x88303E52);
+            g.text(font, "Reinvest profits", contentX + 8, reinvestY + 5, 0xFFF2F5FA, true);
+            boolean reinvest = MarketBot.isReinvestEnabled();
+            g.fill(x + PANEL_W - 67, reinvestY + 6, x + PANEL_W - 23, reinvestY + 21,
+                    reinvest ? 0xFF267D55 : 0xFF465367);
+            g.text(font, reinvest ? "ON" : "OFF", x + PANEL_W - 60, reinvestY + 10, 0xFFFFFFFF, true);
+            g.text(font, "Bot: " + MarketBot.getStatus(), contentX, y + 251, 0xFFFFD36A, false);
+            g.text(font, "Budget limits each buy; profits stay available in your balance.",
+                    contentX, y + 270, 0xFF91A9C7, false);
         }
 
         g.text(font, "RIGHT SHIFT: menu     C: zoom     ESC: close",
@@ -248,6 +263,19 @@ public final class StormClickGuiScreen extends Screen {
             }
         }
         int contentX = x + 153;
+        if (tab == Tab.MODULES && category == Category.UTILITY
+                && mouseX >= contentX && mouseX <= x + PANEL_W - 14) {
+            int settingsY = y + 139;
+            if (mouseY >= settingsY && mouseY <= settingsY + 27) {
+                MarketBot.cycleBudget();
+                return true;
+            }
+            int reinvestY = settingsY + 35;
+            if (mouseY >= reinvestY && mouseY <= reinvestY + 27) {
+                MarketBot.toggleReinvest();
+                return true;
+            }
+        }
         if (mouseX >= contentX && mouseX <= x + PANEL_W - 14) {
             if (tab == Tab.COMBOS && mouseY >= y + 126 && mouseY <= y + 300) {
                 int preset = (int)((mouseY - (y + 126)) / 58);
