@@ -39,6 +39,7 @@ public final class StormClient implements ClientModInitializer {
     public static boolean autoTotemEnabled = false;
     public static boolean autoArmorEnabled = false;
     public static boolean autoRespawnEnabled = false;
+    public static boolean marketBotEnabled = false;
     private static int autoTotemCooldown = 0;
     private static int autoArmorCooldown = 0;
 
@@ -83,6 +84,7 @@ public final class StormClient implements ClientModInitializer {
             }
 
             BaseFinder.tick(client);
+            MarketBot.tick(client);
 
             if (autoTotemCooldown > 0) autoTotemCooldown--;
             if (autoArmorCooldown > 0) autoArmorCooldown--;
