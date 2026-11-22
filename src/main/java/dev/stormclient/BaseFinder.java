@@ -89,9 +89,8 @@ public final class BaseFinder {
             int renderDistance, int topY) {
         // Keep results for chunks that remain inside render distance. Only queue
         // chunks that have newly entered the render-distance square.
-        long radiusSq = (long) renderDistance * renderDistance;
-        SCANNED_CANDIDATES.keySet().removeIf(key -> !insideRange(key, centerX, centerZ, radiusSq));
-        SCANNED_CHUNKS.removeIf(key -> !insideRange(key, centerX, centerZ, radiusSq));
+        SCANNED_CANDIDATES.keySet().removeIf(key -> !insideRange(key, centerX, centerZ, renderDistance));
+        SCANNED_CHUNKS.removeIf(key -> !insideRange(key, centerX, centerZ, renderDistance));
         CHUNK_QUEUE.clear();
         scanIndex = 0;
         CURRENT_CANDIDATES.clear();
@@ -107,6 +106,7 @@ public final class BaseFinder {
                 if (!SCANNED_CHUNKS.contains(key)) CHUNK_QUEUE.add(key);
             }
         }
+        refreshCandidates();
     }
 
     private static boolean scanChunk(Level level, Player player, int chunkX, int chunkZ, int topY) {
@@ -140,12 +140,11 @@ public final class BaseFinder {
         return true;
     }
 
-    private static boolean insideRange(long key, int centerX, int centerZ, long radiusSq) {
+    private static boolean insideRange(long key, int centerX, int centerZ, int radius) {
         int chunkX = (int) (key >> 32);
         int chunkZ = (int) key;
-        long dx = (long) chunkX - centerX;
-        long dz = (long) chunkZ - centerZ;
-        return dx * dx + dz * dz <= radiusSq;
+        return Math.abs((long) chunkX - centerX) <= radius
+                && Math.abs((long) chunkZ - centerZ) <= radius;
     }
 
     private static void refreshCandidates() {
