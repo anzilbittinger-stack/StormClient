@@ -15,7 +15,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -65,12 +64,8 @@ public final class BaseFinder {
             int chunkZ = (int) key;
             if (scanChunk(client.level, chunkX, chunkZ, topY)) {
                 SCANNED_CHUNKS.add(key);
-                Candidate candidate = SCANNED_CANDIDATES.get(key);
-                if (candidate != null && candidate.score() >= 70 && ALERTED_CHUNKS.add(key)) {
-                    client.gui.getChat().addMessage(Component.literal(String.format(Locale.ROOT,
-                            "[StormClient] HIGH BASE LIKELIHOOD: %d/100 in chunk %d, %d (%d storage blocks, %d artificial lights).",
-                            candidate.score(), chunkX, chunkZ, candidate.storageCount, candidate.lightCount)));
-                }
+                // Candidate scores are shown in the HUD; no chat API call here.
+
             }
             refreshCandidates();
         }
