@@ -31,6 +31,7 @@ import net.minecraft.world.phys.Vec3;
 public final class BaseFinder {
     private static final List<Candidate> CURRENT_CANDIDATES = new ArrayList<>();
     private static final Map<Long, Candidate> SCANNED_CANDIDATES = new HashMap<>();
+    private static final Set<Long> SCANNED_CHUNKS = new HashSet<>();
     private static final List<Long> CHUNK_QUEUE = new ArrayList<>();
     private static int scanIndex;
     private static int queuedCenterX = Integer.MIN_VALUE;
@@ -55,8 +56,7 @@ public final class BaseFinder {
         int topY = Math.min(client.level.getMaxY() - 1, client.player.blockPosition().getY());
 
         if (centerX != queuedCenterX || centerZ != queuedCenterZ
-                || renderDistance != queuedRenderDistance || topY != queuedTopY
-                || CHUNK_QUEUE.isEmpty()) {
+                || renderDistance != queuedRenderDistance) {
             rebuildQueue(client, centerX, centerZ, renderDistance, topY);
         }
 
@@ -65,7 +65,9 @@ public final class BaseFinder {
             long key = CHUNK_QUEUE.get(scanIndex++);
             int chunkX = (int) (key >> 32);
             int chunkZ = (int) key;
-            scanChunk(client.level, client.player, chunkX, chunkZ, topY);
+            if (scanChunk(client.level, client.player, chunkX, chunkZ, topY)) {
+                SCANNED_CHUNKS.add(key);
+            }
             refreshCandidates();
         }
     }
@@ -73,6 +75,7 @@ public final class BaseFinder {
     private static void reset() {
         CURRENT_CANDIDATES.clear();
         SCANNED_CANDIDATES.clear();
+        SCANNED_CHUNKS.clear();
         CHUNK_QUEUE.clear();
         scanIndex = 0;
         queuedCenterX = Integer.MIN_VALUE;
@@ -84,10 +87,14 @@ public final class BaseFinder {
 
     private static void rebuildQueue(Minecraft client, int centerX, int centerZ,
             int renderDistance, int topY) {
+        // Keep results for chunks that remain inside render distance. Only queue
+        // chunks that have newly entered the render-distance square.
+        long radiusSq = (long) renderDistance * renderDistance;
+        SCANNED_CANDIDATES.keySet().removeIf(key -> !insideRange(key, centerX, centerZ, radiusSq));
+        SCANNED_CHUNKS.removeIf(key -> !insideRange(key, centerX, centerZ, radiusSq));
         CHUNK_QUEUE.clear();
-        SCANNED_CANDIDATES.clear();
-        CURRENT_CANDIDATES.clear();
         scanIndex = 0;
+        CURRENT_CANDIDATES.clear();
         queuedCenterX = centerX;
         queuedCenterZ = centerZ;
         queuedRenderDistance = renderDistance;
@@ -96,16 +103,17 @@ public final class BaseFinder {
         // Include every chunk coordinate in the configured render-distance square.
         for (int x = centerX - renderDistance; x <= centerX + renderDistance; x++) {
             for (int z = centerZ - renderDistance; z <= centerZ + renderDistance; z++) {
-                CHUNK_QUEUE.add((((long) x) << 32) | (z & 0xffffffffL));
+                long key = (((long) x) << 32) | (z & 0xffffffffL);
+                if (!SCANNED_CHUNKS.contains(key)) CHUNK_QUEUE.add(key);
             }
         }
     }
 
-    private static void scanChunk(Level level, Player player, int chunkX, int chunkZ, int topY) {
+    private static boolean scanChunk(Level level, Player player, int chunkX, int chunkZ, int topY) {
         int minY = level.getMinY();
         int startX = chunkX << 4;
         int startZ = chunkZ << 4;
-        if (!level.hasChunkAt(new BlockPos(startX, topY, startZ))) return;
+        if (!level.hasChunkAt(new BlockPos(startX, topY, startZ))) return false;
 
         Vec3 eye = player.getEyePosition();
         for (int x = startX; x < startX + 16; x++) {
@@ -129,6 +137,15 @@ public final class BaseFinder {
                 }
             }
         }
+        return true;
+    }
+
+    private static boolean insideRange(long key, int centerX, int centerZ, long radiusSq) {
+        int chunkX = (int) (key >> 32);
+        int chunkZ = (int) key;
+        long dx = (long) chunkX - centerX;
+        long dz = (long) chunkZ - centerZ;
+        return dx * dx + dz * dz <= radiusSq;
     }
 
     private static void refreshCandidates() {
