@@ -217,7 +217,11 @@ public final class StormClickGuiScreen extends Screen {
                     contentX, y + 320, 0xFF7F91A8, false);
         }
 
-        if (tab == Tab.MODULES && category == Category.UTILITY) {\n            g.text(font, "Market Bot: " + MarketBot.getStatus(), contentX, y + 334, 0xFFFFD36A, false);\n        }\n\n        g.text(font, "RIGHT SHIFT: menu     C: zoom     ESC: close",
+        if (tab == Tab.MODULES && category == Category.UTILITY) {
+            g.text(font, "Market Bot: " + MarketBot.getStatus(), contentX, y + 334, 0xFFFFD36A, false);
+        }
+
+        g.text(font, "RIGHT SHIFT: menu     C: zoom     ESC: close",
                 x + 16, y + PANEL_H - 17, 0xFF7F91A8, false);
     }
 
