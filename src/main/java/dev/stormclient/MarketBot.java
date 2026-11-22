@@ -59,7 +59,7 @@ public final class MarketBot {
             refreshTicks = 0;
         }
 
-        if (client.gui.getScreen() instanceof AbstractContainerScreen<?> screen) {
+        if (client.gui.screen() instanceof AbstractContainerScreen<?> screen) {
             String title = screen.getTitle().getString().toLowerCase(Locale.ROOT);
             if (isConfirmationTitle(title)) {
                 handleConfirmation(client);
