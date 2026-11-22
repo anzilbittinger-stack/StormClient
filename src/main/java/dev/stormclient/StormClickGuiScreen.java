@@ -77,12 +77,9 @@ public final class StormClickGuiScreen extends Screen {
                 all.add(entry("Totem Alert", "Shows the number of carried totems",
                         () -> StormClient.totemAlertEnabled, () -> StormClient.totemAlertEnabled = !StormClient.totemAlertEnabled));
             }
-            case WORLD -> all.add(entry("Base Finder", "Heuristic scan of already-loaded chunks only",
-                    () -> StormClient.baseFinderEnabled, () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled));
-            case UTILITY -> {
-                all.add(entry("Base Finder", "Heuristic scan of already-loaded chunks only",
-                        () -> StormClient.baseFinderEnabled, () -> StormClient.baseFinderEnabled = !StormClient.baseFinderEnabled));
-            }
+            case WORLD -> all.add(entry("Chunk Finder", "Automatically marks suspicious chunks with full-height 3D frames",
+                    () -> StormClient.chunkFinderEnabled, () -> StormClient.chunkFinderEnabled = !StormClient.chunkFinderEnabled));
+            case UTILITY -> { }
         }
         if (!search.isBlank()) {
             String query = search.toLowerCase(Locale.ROOT);
