@@ -135,7 +135,7 @@ public final class StormClickGuiScreen extends Screen {
             StormClient.hudFpsEnabled = true;
             StormClient.visiblePlayersEnabled = true;
             StormClient.visibleMobsEnabled = true;
-            StormClient.baseFinderEnabled = true;
+            StormClient.chunkFinderEnabled = true;
         }
     }
 
