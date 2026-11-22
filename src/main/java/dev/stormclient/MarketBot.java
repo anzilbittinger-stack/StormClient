@@ -27,7 +27,12 @@ public final class MarketBot {
     private static final Pattern MONEY = Pattern.compile(
             "(?i)(?:\\$\\s*)?([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*([KMB])?"
     );
-    private static final double MAX_BUY_PRICE = 10_000_000.0;
+    private static final double[] BUDGET_OPTIONS = {
+            100_000, 500_000, 1_000_000, 5_000_000, 10_000_000,
+            50_000_000, 100_000_000, 500_000_000, 1_000_000_000
+    };
+    private static int budgetIndex = 2;
+    private static boolean reinvestEnabled = true;
     private static final double MAX_BUY_TO_MEDIAN_RATIO = 0.75;
     private static final double RESALE_TO_MEDIAN_RATIO = 0.95;
     private static final int REFRESH_TICKS = 200;
@@ -46,6 +51,29 @@ public final class MarketBot {
         return status;
     }
 
+    public static double getBudget() {
+        return BUDGET_OPTIONS[budgetIndex];
+    }
+
+    public static String getBudgetLabel() {
+        double value = getBudget();
+        if (value >= 1_000_000_000) return String.format(Locale.US, "%.0fB", value / 1_000_000_000);
+        if (value >= 1_000_000) return String.format(Locale.US, "%.0fM", value / 1_000_000);
+        return String.format(Locale.US, "%.0fK", value / 1_000);
+    }
+
+    public static void cycleBudget() {
+        budgetIndex = (budgetIndex + 1) % BUDGET_OPTIONS.length;
+    }
+
+    public static boolean isReinvestEnabled() {
+        return reinvestEnabled;
+    }
+
+    public static void toggleReinvest() {
+        reinvestEnabled = !reinvestEnabled;
+    }
+
     public static void tick(Minecraft client) {
         if (!StormClient.marketBotEnabled || client.player == null || client.level == null) {
             return;
@@ -55,8 +83,13 @@ public final class MarketBot {
 
         if (waitingForSale && actionCooldown == 0) {
             waitingForSale = false;
-            status = "Sale submitted; resuming market scan";
+            status = "Sale submitted";
             refreshTicks = 0;
+            if (!reinvestEnabled) {
+                StormClient.marketBotEnabled = false;
+                status = "Flip complete — reinvest is OFF";
+                return;
+            }
         }
 
         if (client.gui.screen() instanceof AbstractContainerScreen<?> screen) {
@@ -128,7 +161,7 @@ public final class MarketBot {
             double buyCost = cheapest.price() * 1.02;
             double resale = median * RESALE_TO_MEDIAN_RATIO;
             double profit = resale - buyCost;
-            if (cheapest.price() > MAX_BUY_PRICE) continue;
+            if (cheapest.price() > getBudget()) continue;
             if (cheapest.price() > median * MAX_BUY_TO_MEDIAN_RATIO) continue;
             if (profit <= 0 || profit / buyCost < 0.20) continue;
             if (best == null || profit > (bestMedian * RESALE_TO_MEDIAN_RATIO - best.price() * 1.02)) {
