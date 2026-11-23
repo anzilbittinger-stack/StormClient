@@ -50,6 +50,7 @@ public final class MarketBot {
     private static String status = "Idle";
     private static final Map<String, List<Listing>> auctionListings = new HashMap<>();
     private static final Map<String, Integer> deliveredOrders = new HashMap<>();
+    private static final Map<String, OrderDemand> orderDemands = new HashMap<>();
 
     private MarketBot() {}
 
@@ -154,8 +155,18 @@ public final class MarketBot {
             return;
         }
         if (phase == Phase.IDLE) {
-            startAuctionScan(client);
+            startOrderScan(client);
         }
+    }
+
+    private static void startOrderScan(Minecraft client) {
+        orderDemands.clear();
+        deliveredOrders.clear();
+        orderPage = 1;
+        phase = Phase.ORDERS_SCAN;
+        client.player.connection.sendCommand("orders");
+        status = "Reading buy orders — page 1/" + MAX_PAGES;
+        actionCooldown = 25;
     }
 
     private static void startAuctionScan(Minecraft client) {
@@ -264,6 +275,48 @@ public final class MarketBot {
             }
         }
 
+        // Prefer a confirmed buy-order spread over an estimated AH-to-AH resale.
+        // AH listing prices are total listing prices; order prices are per item.
+        Listing orderFlip = null;
+        double orderFlipProfit = 0;
+        double orderFlipSaleTotal = 0;
+        for (List<Listing> listings : auctionListings.values()) {
+            for (Listing listing : listings) {
+                OrderDemand demand = orderDemands.get(listing.itemId());
+                if (demand == null || demand.remaining() < listing.count() || listing.count() <= 0) continue;
+                double unitCost = listing.price() / listing.count();
+                double buyTotal = listing.price() * 1.02;
+                double saleTotal = Math.floor(demand.unitPrice() * listing.count() * 0.95);
+                double profit = saleTotal - buyTotal;
+                if (unitCost <= 0 || profit <= 0 || profit / buyTotal < 0.10) continue;
+                if (listing.price() > getBudget()) continue;
+                if (profit > orderFlipProfit) {
+                    orderFlip = listing;
+                    orderFlipProfit = profit;
+                    orderFlipSaleTotal = saleTotal;
+                }
+            }
+        }
+
+        if (orderFlip != null) {
+            pendingItemId = orderFlip.itemId();
+            pendingSalePrice = orderFlipSaleTotal;
+            pendingBuySlot = orderFlip.slot();
+            targetBuyPage = orderFlip.page();
+            if (currentPage > targetBuyPage) {
+                phase = Phase.RETURN_TO_BUY_PAGE;
+                status = "Found order flip; returning to AH page " + targetBuyPage;
+                actionCooldown = 5;
+                return;
+            }
+            phase = Phase.WAIT_BUY;
+            status = "Order flip: buying " + pendingItemId + " for $" + format(orderFlip.price())
+                    + "; target listing $" + format(orderFlipSaleTotal);
+            clickSlot(client, pendingBuySlot);
+            actionCooldown = 25;
+            return;
+        }
+
         if (best != null) {
             pendingItemId = best.itemId();
             pendingSalePrice = Math.max(1, Math.floor(bestMedian * RESALE_TO_MEDIAN_RATIO));
@@ -282,12 +335,9 @@ public final class MarketBot {
             return;
         }
 
-        phase = Phase.ORDERS_SCAN;
-        orderPage = 1;
-        deliveredOrders.clear();
-        client.player.connection.sendCommand("orders");
-        status = "No qualifying AH flip; checking orders page 1";
-        actionCooldown = 25;
+        phase = Phase.IDLE;
+        status = "No profitable order or AH flip found; checking again shortly";
+        actionCooldown = 40;
     }
 
     private static double findPendingPrice() {
@@ -343,34 +393,76 @@ public final class MarketBot {
 
     private static void scanOrdersPage(Minecraft client) {
         var menu = client.player.containerMenu;
+        int found = 0;
         for (int i = 0; i < menu.slots.size(); i++) {
             ItemStack order = menu.slots.get(i).getItem();
             if (order.isEmpty() || isMenuControl(order)) continue;
-            String lore = loreText(order).toLowerCase(Locale.ROOT);
-            if (!lore.contains("click to deliver")) continue;
-            if (lore.contains("delivered") && !lore.matches("(?s).*0\\s*/\\s*[1-9][0-9]*\\s+delivered.*")) continue;
+            String lore = loreText(order);
+            String lowerLore = lore.toLowerCase(Locale.ROOT);
+            if (!lowerLore.contains("click to deliver") && !lowerLore.contains("delivered")) continue;
+            double unitPrice = readOrderUnitPrice(lore);
+            int remaining = readRemainingOrderQuantity(lore, order.getCount());
+            if (unitPrice <= 0 || remaining <= 0) continue;
             String id = BuiltInRegistries.ITEM.getKey(order.getItem()).toString();
-            if (deliveredOrders.containsKey(id)) continue;
-            int inventoryCount = countInventoryItem(client, id);
-            if (inventoryCount <= 0) continue;
-            clickSlot(client, i);
-            deliveredOrders.put(id, i);
-            phase = Phase.WAIT_DELIVERY;
-            status = "Delivering " + order.getHoverName().getString() + " (" + inventoryCount + " available)";
-            actionCooldown = 35;
-            return;
+            OrderDemand previous = orderDemands.get(id);
+            if (previous == null || unitPrice > previous.unitPrice()
+                    || (unitPrice == previous.unitPrice() && remaining > previous.remaining())) {
+                orderDemands.put(id, new OrderDemand(unitPrice, remaining));
+            }
+            found++;
         }
+
         int next = findNavigationSlot(client, true);
         if (next >= 0 && orderPage < MAX_PAGES) {
             clickSlot(client, next);
             orderPage++;
-            status = "Checking orders page " + orderPage + "/" + MAX_PAGES;
+            status = "Reading buy orders page " + orderPage + "/" + MAX_PAGES
+                    + " (" + found + " offers, " + orderDemands.size() + " item types)";
             actionCooldown = 22;
             return;
         }
-        phase = Phase.IDLE;
-        status = "No deliverable orders found; restarting Auction House scan";
-        actionCooldown = 25;
+
+        status = "Read " + orderDemands.size() + " buy-order item types; opening Auction House";
+        startAuctionScan(client);
+    }
+
+    private static double readOrderUnitPrice(String lore) {
+        Matcher matcher = MONEY.matcher(lore);
+        while (matcher.find()) {
+            int end = matcher.end();
+            String tail = lore.substring(end).toLowerCase(Locale.ROOT);
+            String lineTail = tail.split("\\\\n", 2)[0];
+            if (lineTail.contains("each") || lineTail.contains("per item")) {
+                try {
+                    double value = Double.parseDouble(matcher.group(1).replace(",", ""));
+                    String suffix = matcher.group(2);
+                    if (suffix != null) value *= switch (suffix.toUpperCase(Locale.ROOT)) {
+                        case "K" -> 1_000.0;
+                        case "M" -> 1_000_000.0;
+                        case "B" -> 1_000_000_000.0;
+                        default -> 1.0;
+                    };
+                    return value;
+                } catch (NumberFormatException ignored) {
+                    return -1;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static int readRemainingOrderQuantity(String lore, int fallback) {
+        Matcher matcher = Pattern.compile("(?i)([0-9][0-9,]*)\\\\s*/\\\\s*([0-9][0-9,]*)").matcher(lore);
+        if (matcher.find()) {
+            try {
+                int delivered = Integer.parseInt(matcher.group(1).replace(",", ""));
+                int wanted = Integer.parseInt(matcher.group(2).replace(",", ""));
+                return Math.max(0, wanted - delivered);
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return Math.max(0, fallback);
     }
 
     private static int countInventoryItem(Minecraft client, String itemId) {
@@ -471,4 +563,5 @@ public final class MarketBot {
     private static String formatCommandPrice(double value) { return String.format(Locale.US, "%.0f", value); }
 
     private record Listing(int page, int slot, String itemId, double price, int count) {}
+    private record OrderDemand(double unitPrice, int remaining) {}
 }
