@@ -36,7 +36,7 @@ public final class MarketBot {
     private static final double RESALE_TO_MEDIAN_RATIO = 0.95;
     private static final int MAX_PAGES = 9;
 
-    private enum Phase { IDLE, AUCTION_SCAN, RETURN_TO_BUY_PAGE, WAIT_BUY, ORDERS_SCAN, OWN_ORDERS_SCAN, OPEN_OWN_ORDER, EDIT_OWN_ORDER, WAIT_COLLECT, COLLECTING_ORDER, PRICE_COLLECTED_ITEMS, WAIT_DELIVERY, WAIT_SALE }
+    private enum Phase { IDLE, AUCTION_SCAN, RETURN_TO_BUY_PAGE, WAIT_BUY, ORDERS_SCAN, OWN_ORDERS_SCAN, OPEN_OWN_ORDER, EDIT_OWN_ORDER, WAIT_COLLECT, COLLECTING_ORDER, PRICE_COLLECTED_ITEMS, SELL_COLLECTED_ITEMS, WAIT_DELIVERY, WAIT_SALE }
     private static Phase phase = Phase.IDLE;
     private static int actionCooldown;
     private static int currentPage = 1;
@@ -55,6 +55,7 @@ public final class MarketBot {
     private static double filledOrderUnitCost;
     private static double resaleUnitPrice;
     private static boolean pricingCollectedItems;
+    private static int inventoryCountBeforeSale;
 
     private MarketBot() {}
 
@@ -80,6 +81,22 @@ public final class MarketBot {
         if (actionCooldown > 0) actionCooldown--;
         if (actionCooldown > 0) return;
 
+        if (phase == Phase.WAIT_SALE && pricingCollectedItems) {
+            if (countInventoryItem(client, filledOrderItemId) < inventoryCountBeforeSale) {
+                phase = Phase.SELL_COLLECTED_ITEMS;
+                status = "Previous stack listed; continuing with remaining collected items";
+            } else {
+                pricingCollectedItems = false; phase = Phase.IDLE;
+                status = "Could not confirm the previous listing; stopped to avoid duplicate sales";
+                actionCooldown = 30; return;
+            }
+        }
+        if (phase == Phase.SELL_COLLECTED_ITEMS) {
+            if (tryListNextCollectedStack(client)) return;
+            pricingCollectedItems = false; phase = Phase.IDLE;
+            status = "All collected order items have been submitted for resale";
+            actionCooldown = 30; return;
+        }
         if (client.gui.screen() instanceof AbstractContainerScreen<?> screen) {
             String title = screen.getTitle().getString().toLowerCase(Locale.ROOT);
             if (isConfirmationTitle(title)) {
@@ -160,9 +177,7 @@ public final class MarketBot {
             return;
         }
         if (phase == Phase.WAIT_SALE) {
-            if (pricingCollectedItems && tryListNextCollectedStack(client)) return;
             phase = Phase.IDLE;
-            pricingCollectedItems = false;
             status = "Sale command sent; checking next opportunity";
             if (!reinvestEnabled) { StormClient.marketBotEnabled = false; status = "Flip submitted — reinvest is OFF"; return; }
         }
@@ -342,7 +357,7 @@ public final class MarketBot {
             resaleUnitPrice = Math.floor(medianUnitPrice * 0.95);
             if (resaleUnitPrice < filledOrderUnitCost * 1.10) { status = "Market price too low for 10% profit after tax; keeping items"; pricingCollectedItems = false; phase = Phase.IDLE; return; }
             status = "Market checked: listing collected items at $" + format(resaleUnitPrice) + " each";
-            phase = Phase.WAIT_SALE; actionCooldown = 2; tryListNextCollectedStack(client); return;
+            phase = Phase.SELL_COLLECTED_ITEMS; actionCooldown = 2; tryListNextCollectedStack(client); return;
         }
         Listing best = null;
         double bestMedian = 0;
@@ -442,6 +457,7 @@ public final class MarketBot {
             double stackListingPrice = Math.floor(resaleUnitPrice * stack.getCount());
             client.player.connection.sendCommand("ah sell " + formatCommandPrice(stackListingPrice));
             status = "Listing collected " + stack.getCount() + " " + stack.getHoverName().getString() + " for $" + format(stackListingPrice);
+            inventoryCountBeforeSale = countInventoryItem(client, filledOrderItemId);
             phase = Phase.WAIT_SALE; actionCooldown = 35; return true;
         }
         return false;
