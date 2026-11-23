@@ -36,8 +36,8 @@ public final class BaseFinder {
     private static int scanIndex;
     private static int scanColumnIndex;
     private static Candidate activeCandidate;
-    // 16 columns per tick is 4x the previous scan throughput without doing a full chunk in one tick.
-    private static final int COLUMNS_PER_TICK = 16;
+    // 32 columns per tick is 8x the original throughput, while still spreading each chunk over multiple ticks.
+    private static final int COLUMNS_PER_TICK = 32;
     private static final Map<Block, BlockInfo> BLOCK_INFO_CACHE = new HashMap<>();
     private static long lastQueueRetryTime = Long.MIN_VALUE;
     private static int queuedCenterX = Integer.MIN_VALUE;
