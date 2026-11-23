@@ -455,9 +455,9 @@ public final class MarketBot {
             }
             inv.setSelectedSlot(i);
             double stackListingPrice = Math.floor(resaleUnitPrice * stack.getCount());
+            inventoryCountBeforeSale = countInventoryItem(client, filledOrderItemId);
             client.player.connection.sendCommand("ah sell " + formatCommandPrice(stackListingPrice));
             status = "Listing collected " + stack.getCount() + " " + stack.getHoverName().getString() + " for $" + format(stackListingPrice);
-            inventoryCountBeforeSale = countInventoryItem(client, filledOrderItemId);
             phase = Phase.WAIT_SALE; actionCooldown = 35; return true;
         }
         return false;
