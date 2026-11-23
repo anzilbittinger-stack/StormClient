@@ -431,8 +431,7 @@ public final class MarketBot {
         while (matcher.find()) {
             int end = matcher.end();
             String tail = lore.substring(end).toLowerCase(Locale.ROOT);
-            String lineTail = tail.split("\\\\n", 2)[0];
-            if (lineTail.contains("each") || lineTail.contains("per item")) {
+            if (tail.contains("each") || tail.contains("per item")) {
                 try {
                     double value = Double.parseDouble(matcher.group(1).replace(",", ""));
                     String suffix = matcher.group(2);
@@ -452,7 +451,7 @@ public final class MarketBot {
     }
 
     private static int readRemainingOrderQuantity(String lore, int fallback) {
-        Matcher matcher = Pattern.compile("(?i)([0-9][0-9,]*)\\\\s*/\\\\s*([0-9][0-9,]*)").matcher(lore);
+        Matcher matcher = Pattern.compile("(?i)([0-9][0-9,]*)\\s*/\\s*([0-9][0-9,]*)").matcher(lore);
         if (matcher.find()) {
             try {
                 int delivered = Integer.parseInt(matcher.group(1).replace(",", ""));
