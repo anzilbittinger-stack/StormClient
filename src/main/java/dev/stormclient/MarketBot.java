@@ -198,8 +198,11 @@ public final class MarketBot {
             String label = stack.getHoverName().getString().toLowerCase(Locale.ROOT);
             String lore = loreText(stack).toLowerCase(Locale.ROOT);
             String text = label + " " + lore;
-            if (text.contains("confirm") || text.contains("purchase")
-                    || text.contains("buy now") || text.contains("accept")) {
+            // Pear/Donut-style purchase confirmation uses a plain green "Yes" button.
+            // Only accept an exact Yes label; never click the neighbouring No button.
+            if (label.trim().equals("yes") || text.contains("confirm")
+                    || text.contains("purchase") || text.contains("buy now")
+                    || text.contains("accept")) {
                 clickSlot(client, i);
                 status = "Confirming market action...";
                 actionCooldown = 30;
