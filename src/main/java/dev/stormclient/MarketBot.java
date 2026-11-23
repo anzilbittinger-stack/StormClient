@@ -36,7 +36,7 @@ public final class MarketBot {
     private static final double RESALE_TO_MEDIAN_RATIO = 0.95;
     private static final int MAX_PAGES = 9;
 
-    private enum Phase { IDLE, AUCTION_SCAN, RETURN_TO_BUY_PAGE, WAIT_BUY, ORDERS_SCAN, WAIT_DELIVERY, WAIT_SALE }
+    private enum Phase { IDLE, AUCTION_SCAN, RETURN_TO_BUY_PAGE, WAIT_BUY, ORDERS_SCAN, OWN_ORDERS_SCAN, OPEN_OWN_ORDER, EDIT_OWN_ORDER, WAIT_COLLECT, COLLECTING_ORDER, PRICE_COLLECTED_ITEMS, WAIT_DELIVERY, WAIT_SALE }
     private static Phase phase = Phase.IDLE;
     private static int actionCooldown;
     private static int currentPage = 1;
@@ -51,6 +51,10 @@ public final class MarketBot {
     private static final Map<String, List<Listing>> auctionListings = new HashMap<>();
     private static final Map<String, Integer> deliveredOrders = new HashMap<>();
     private static final Map<String, OrderDemand> orderDemands = new HashMap<>();
+    private static String filledOrderItemId = "";
+    private static double filledOrderUnitCost;
+    private static double resaleUnitPrice;
+    private static boolean pricingCollectedItems;
 
     private MarketBot() {}
 
@@ -82,6 +86,7 @@ public final class MarketBot {
                 handleConfirmation(client);
                 return;
             }
+            if (title.contains("collect items") && (phase == Phase.WAIT_COLLECT || phase == Phase.COLLECTING_ORDER)) { phase = Phase.COLLECTING_ORDER; collectFilledOrderItems(client); return; }
             if (isAuctionTitle(title)) {
                 if (phase == Phase.WAIT_BUY) {
                     if (tryFindBoughtItem(client)) return;
@@ -119,15 +124,29 @@ public final class MarketBot {
                 if (phase == Phase.IDLE) startAuctionScan(client);
                 return;
             }
+            if (title.contains("collect items") && (phase == Phase.WAIT_COLLECT || phase == Phase.COLLECTING_ORDER)) {
+                phase = Phase.COLLECTING_ORDER;
+                collectFilledOrderItems(client);
+                return;
+            }
             if (isOrdersTitle(title)) {
-                if (phase == Phase.WAIT_DELIVERY) {
-                    status = "Checking order delivery result";
-                    phase = Phase.ORDERS_SCAN;
-                    actionCooldown = 25;
+                if (phase == Phase.ORDERS_SCAN) {
+                    int yourOrders = findMenuSlot(client, "your orders");
+                    if (yourOrders >= 0) { clickSlot(client, yourOrders); phase = Phase.OWN_ORDERS_SCAN; status = "Opening Your Orders"; actionCooldown = 20; }
+                    else { status = "Waiting for Your Orders button"; actionCooldown = 20; }
                     return;
                 }
-                if (phase == Phase.ORDERS_SCAN) {
-                    scanOrdersPage(client);
+                if (phase == Phase.OWN_ORDERS_SCAN) { scanOwnOrders(client); return; }
+                if (phase == Phase.OPEN_OWN_ORDER) {
+                    int edit = findMenuSlot(client, "edit order");
+                    if (edit >= 0) { clickSlot(client, edit); phase = Phase.EDIT_OWN_ORDER; status = "Opening filled order controls"; actionCooldown = 18; }
+                    else { status = "Waiting for Edit Order control"; actionCooldown = 15; }
+                    return;
+                }
+                if (phase == Phase.EDIT_OWN_ORDER) {
+                    int collect = findMenuSlot(client, "collect");
+                    if (collect >= 0) { clickSlot(client, collect); phase = Phase.WAIT_COLLECT; status = "Opening Collect Items"; actionCooldown = 20; }
+                    else { status = "Waiting for Collect button"; actionCooldown = 15; }
                     return;
                 }
                 return;
@@ -141,13 +160,11 @@ public final class MarketBot {
             return;
         }
         if (phase == Phase.WAIT_SALE) {
+            if (pricingCollectedItems && tryListNextCollectedStack(client)) return;
             phase = Phase.IDLE;
+            pricingCollectedItems = false;
             status = "Sale command sent; checking next opportunity";
-            if (!reinvestEnabled) {
-                StormClient.marketBotEnabled = false;
-                status = "Flip submitted — reinvest is OFF";
-                return;
-            }
+            if (!reinvestEnabled) { StormClient.marketBotEnabled = false; status = "Flip submitted — reinvest is OFF"; return; }
         }
         if (phase == Phase.WAIT_DELIVERY) {
             phase = Phase.ORDERS_SCAN;
@@ -160,13 +177,73 @@ public final class MarketBot {
     }
 
     private static void startOrderScan(Minecraft client) {
-        orderDemands.clear();
-        deliveredOrders.clear();
-        orderPage = 1;
+        orderDemands.clear(); deliveredOrders.clear(); orderPage = 1;
         phase = Phase.ORDERS_SCAN;
         client.player.connection.sendCommand("orders");
-        status = "Reading buy orders — page 1/" + MAX_PAGES;
+        status = "Checking Your Orders for completed buy orders";
         actionCooldown = 25;
+    }
+
+    private static void scanOwnOrders(Minecraft client) {
+        var menu = client.player.containerMenu;
+        int containerSlots = Math.max(0, menu.slots.size() - 36);
+        for (int i = 0; i < containerSlots; i++) {
+            ItemStack order = menu.slots.get(i).getItem();
+            if (order.isEmpty() || isMenuControl(order)) continue;
+            String lore = loreText(order);
+            int delivered = readDeliveredOrderQuantity(lore);
+            int wanted = readWantedOrderQuantity(lore);
+            if (wanted <= 0 || delivered < wanted) continue;
+            double unitPrice = readOrderUnitPrice(lore);
+            if (unitPrice <= 0) continue;
+            filledOrderItemId = BuiltInRegistries.ITEM.getKey(order.getItem()).toString();
+            filledOrderUnitCost = unitPrice * 1.02;
+            clickSlot(client, i);
+            phase = Phase.OPEN_OWN_ORDER;
+            status = "Found fully filled order: " + order.getHoverName().getString() + " (" + delivered + "/" + wanted + "); opening it";
+            actionCooldown = 20;
+            return;
+        }
+        int next = findNavigationSlot(client, true);
+        if (next >= 0 && orderPage < MAX_PAGES) { clickSlot(client, next); orderPage++; status = "Checking Your Orders page " + orderPage + "/" + MAX_PAGES; actionCooldown = 20; return; }
+        status = "No fully filled orders; scanning Auction House";
+        startAuctionScan(client);
+    }
+
+    private static int readDeliveredOrderQuantity(String lore) {
+        Matcher m = Pattern.compile("(?i)([0-9][0-9,]*)\\s*/\\s*([0-9][0-9,]*)").matcher(lore);
+        if (!m.find()) return -1;
+        try { return Integer.parseInt(m.group(1).replace(",", "")); } catch (NumberFormatException ignored) { return -1; }
+    }
+
+    private static int readWantedOrderQuantity(String lore) {
+        Matcher m = Pattern.compile("(?i)([0-9][0-9,]*)\\s*/\\s*([0-9][0-9,]*)").matcher(lore);
+        if (!m.find()) return -1;
+        try { return Integer.parseInt(m.group(2).replace(",", "")); } catch (NumberFormatException ignored) { return -1; }
+    }
+
+    private static void collectFilledOrderItems(Minecraft client) {
+        var menu = client.player.containerMenu;
+        int containerSlots = Math.max(0, menu.slots.size() - 36);
+        for (int i = 0; i < containerSlots; i++) {
+            ItemStack stack = menu.slots.get(i).getItem();
+            if (stack.isEmpty() || !BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(filledOrderItemId)) continue;
+            if (client.gameMode != null) {
+                client.gameMode.handleContainerInput(menu.containerId, i, 0, ContainerInput.QUICK_MOVE, client.player);
+                status = "Collecting filled order items: " + stack.getCount() + " " + stack.getHoverName().getString();
+                actionCooldown = 5;
+                return;
+            }
+        }
+        int next = findNavigationSlot(client, true);
+        if (next >= 0) { clickSlot(client, next); status = "Checking next Collect Items page"; actionCooldown = 15; return; }
+        int collected = countInventoryItem(client, filledOrderItemId);
+        if (collected <= 0) { status = "Collect screen empty; no matching items collected"; phase = Phase.IDLE; actionCooldown = 30; return; }
+        pricingCollectedItems = true;
+        phase = Phase.PRICE_COLLECTED_ITEMS;
+        status = "Collected " + collected + " items; checking market price before resale";
+        client.player.closeContainer();
+        startAuctionScan(client);
     }
 
     private static void startAuctionScan(Minecraft client) {
@@ -256,6 +333,17 @@ public final class MarketBot {
     }
 
     private static void finishAuctionScan(Minecraft client) {
+        if (pricingCollectedItems) {
+            List<Listing> matching = auctionListings.get(filledOrderItemId);
+            if (matching == null || matching.isEmpty()) { status = "No market price found for collected order; keeping items"; pricingCollectedItems = false; phase = Phase.IDLE; return; }
+            List<Double> unitPrices = matching.stream().filter(x -> x.count() > 0).map(x -> x.price() / x.count()).sorted().toList();
+            if (unitPrices.isEmpty()) { status = "Could not calculate market unit price; keeping items"; pricingCollectedItems = false; phase = Phase.IDLE; return; }
+            double medianUnitPrice = unitPrices.get(unitPrices.size() / 2);
+            resaleUnitPrice = Math.floor(medianUnitPrice * 0.95);
+            if (resaleUnitPrice < filledOrderUnitCost * 1.10) { status = "Market price too low for 10% profit after tax; keeping items"; pricingCollectedItems = false; phase = Phase.IDLE; return; }
+            status = "Market checked: listing collected items at $" + format(resaleUnitPrice) + " each";
+            phase = Phase.WAIT_SALE; actionCooldown = 2; tryListNextCollectedStack(client); return;
+        }
         Listing best = null;
         double bestMedian = 0;
         for (List<Listing> listings : auctionListings.values()) {
@@ -338,6 +426,37 @@ public final class MarketBot {
         phase = Phase.IDLE;
         status = "No profitable order or AH flip found; checking again shortly";
         actionCooldown = 40;
+    }
+
+    private static boolean tryListNextCollectedStack(Minecraft client) {
+        var inv = client.player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack stack = inv.getItem(i);
+            if (stack.isEmpty() || !BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(filledOrderItemId)) continue;
+            if (i >= 9) {
+                int menuSlot = client.player.containerMenu.slots.size() - 36 + i;
+                if (menuSlot < 0 || menuSlot >= client.player.containerMenu.slots.size()) return false;
+                clickSwapToHotbar(client, menuSlot, 8); status = "Moving collected stack to hotbar for resale"; actionCooldown = 8; return true;
+            }
+            inv.setSelectedSlot(i);
+            double stackListingPrice = Math.floor(resaleUnitPrice * stack.getCount());
+            client.player.connection.sendCommand("ah sell " + formatCommandPrice(stackListingPrice));
+            status = "Listing collected " + stack.getCount() + " " + stack.getHoverName().getString() + " for $" + format(stackListingPrice);
+            phase = Phase.WAIT_SALE; actionCooldown = 35; return true;
+        }
+        return false;
+    }
+
+    private static int findMenuSlot(Minecraft client, String phrase) {
+        var menu = client.player.containerMenu;
+        int containerSlots = Math.max(0, menu.slots.size() - 36);
+        for (int i = 0; i < containerSlots; i++) {
+            ItemStack stack = menu.slots.get(i).getItem();
+            if (stack.isEmpty()) continue;
+            String text = (stack.getHoverName().getString() + " " + loreText(stack)).toLowerCase(Locale.ROOT);
+            if (text.contains(phrase)) return i;
+        }
+        return -1;
     }
 
     private static double findPendingPrice() {
