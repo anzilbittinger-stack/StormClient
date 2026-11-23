@@ -22,7 +22,8 @@ public final class StormClickGuiScreen extends Screen {
     private enum Category { COMBAT, MOVEMENT, VISUALS, PLAYER, WORLD, UTILITY }
 
     private Tab tab = Tab.MODULES;
-    // Open directly on Utility so the Market Bot control is visible immediately.\n    private Category category = Category.UTILITY;
+    // Open directly on Utility so the Market Bot control is visible immediately.
+    private Category category = Category.UTILITY;
     private String search = "";
     private int scroll;
     private static final int PANEL_W = 520;
