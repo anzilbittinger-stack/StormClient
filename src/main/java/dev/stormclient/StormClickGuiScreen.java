@@ -22,7 +22,7 @@ public final class StormClickGuiScreen extends Screen {
     private enum Category { COMBAT, MOVEMENT, VISUALS, PLAYER, WORLD, UTILITY }
 
     private Tab tab = Tab.MODULES;
-    private Category category = Category.MOVEMENT;
+    // Open directly on Utility so the Market Bot control is visible immediately.\n    private Category category = Category.UTILITY;
     private String search = "";
     private int scroll;
     private static final int PANEL_W = 520;
@@ -80,7 +80,7 @@ public final class StormClickGuiScreen extends Screen {
             case WORLD -> all.add(entry("Chunk Finder", "Automatically marks suspicious chunks with full-height 3D frames",
                     () -> StormClient.chunkFinderEnabled, () -> StormClient.chunkFinderEnabled = !StormClient.chunkFinderEnabled));
             case UTILITY -> {
-                all.add(entry("Market Bot", "Auto-buys qualifying AH listings and relists flips on Donut-style servers",
+                all.add(entry("Market Bot", "Toggle ON/OFF: monitors the auction house and attempts qualifying flips",
                         () -> StormClient.marketBotEnabled, () -> StormClient.marketBotEnabled = !StormClient.marketBotEnabled));
             }
         }
@@ -234,6 +234,14 @@ public final class StormClickGuiScreen extends Screen {
             g.text(font, "Bot: " + MarketBot.getStatus(), contentX, y + 251, 0xFFFFD36A, false);
             g.text(font, "Budget limits each buy; profits stay available in your balance.",
                     contentX, y + 270, 0xFF91A9C7, false);
+        }
+        if (tab == Tab.MODULES && category == Category.WORLD) {
+            List<String> scanInfo = BaseFinder.getOverlayLines();
+            int infoY = y + 143;
+            for (int i = 0; i < Math.min(7, scanInfo.size()); i++) {
+                g.text(font, scanInfo.get(i), contentX, infoY + i * 16,
+                        i < 2 ? 0xFF72B8FF : 0xFFFF5555, i < 2);
+            }
         }
 
         g.text(font, "RIGHT SHIFT: menu     C: zoom     ESC: close",
