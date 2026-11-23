@@ -25,6 +25,11 @@ public final class StormHud {
         int x = 8;
         int y = 8;
         int line = 11;
+        // Keep trading status visible in-game instead of hiding it inside the ClickGUI.
+        if (StormClient.marketBotEnabled) {
+            draw(graphics, "MARKET BOT: " + MarketBot.getStatus(), x, y, 0xFFFFD36A);
+            y += line;
+        }
         if (StormClient.hudFpsEnabled) {
             draw(graphics, "FPS: " + client.getFps(), x, y);
             y += line;
