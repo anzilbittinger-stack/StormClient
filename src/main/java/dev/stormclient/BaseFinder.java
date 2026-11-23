@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.BlockPos.MutableBlockPos;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.level.Level;
@@ -34,7 +36,10 @@ public final class BaseFinder {
     private static int scanIndex;
     private static int scanColumnIndex;
     private static Candidate activeCandidate;
-    private static final int COLUMNS_PER_TICK = 4;
+    // 16 columns per tick is 4x the previous scan throughput without doing a full chunk in one tick.
+    private static final int COLUMNS_PER_TICK = 16;
+    private static final Map<Block, BlockInfo> BLOCK_INFO_CACHE = new HashMap<>();
+    private static long lastQueueRetryTime = Long.MIN_VALUE;
     private static int queuedCenterX = Integer.MIN_VALUE;
     private static int queuedCenterZ = Integer.MIN_VALUE;
     private static int queuedRenderDistance = -1;
@@ -60,7 +65,7 @@ public final class BaseFinder {
             rebuildQueue(centerX, centerZ, renderDistance);
         }
 
-        // Spread each chunk scan over multiple ticks to avoid long client-thread stalls.
+        // Spread scans across ticks; cache block metadata so we do not resolve registry names for every block.
         int columnsScanned = 0;
         while (scanIndex < CHUNK_QUEUE.size() && columnsScanned < COLUMNS_PER_TICK) {
             long key = CHUNK_QUEUE.get(scanIndex);
@@ -82,6 +87,11 @@ public final class BaseFinder {
                 refreshCandidates();
             }
         }
+        // Retry chunks that were not loaded when first visited; newly loaded chunks are picked up within ~2 seconds.
+        if (scanIndex >= CHUNK_QUEUE.size() && client.level.getGameTime() - lastQueueRetryTime >= 40) {
+            lastQueueRetryTime = client.level.getGameTime();
+            rebuildQueue(centerX, centerZ, renderDistance);
+        }
     }
 
     private static void reset() {
@@ -97,6 +107,8 @@ public final class BaseFinder {
         queuedCenterZ = Integer.MIN_VALUE;
         queuedRenderDistance = -1;
         lastWorldTime = Long.MIN_VALUE;
+        lastQueueRetryTime = Long.MIN_VALUE;
+        BLOCK_INFO_CACHE.clear();
     }
 
     private static void rebuildQueue(int centerX, int centerZ, int renderDistance) {
@@ -131,17 +143,20 @@ public final class BaseFinder {
         int x = startX + columnX;
         int z = startZ + columnZ;
         long key = chunkKey(chunkX, chunkZ);
+        MutableBlockPos pos = new MutableBlockPos(x, minY, z);
         for (int y = minY; y <= topY; y++) {
-            BlockPos pos = new BlockPos(x, y, z);
-            String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock())
-                    .getPath().toLowerCase(Locale.ROOT);
-            int blockWeight = weight(blockId);
-            if (blockWeight == 0) continue;
+            pos.set(x, y, z);
+            Block block = level.getBlockState(pos).getBlock();
+            BlockInfo info = BLOCK_INFO_CACHE.computeIfAbsent(block, value -> {
+                String id = BuiltInRegistries.BLOCK.getKey(value).getPath().toLowerCase(Locale.ROOT);
+                return new BlockInfo(id, weight(id));
+            });
+            if (info.weight() == 0) continue;
             if (activeCandidate == null) {
                 activeCandidate = new Candidate(chunkX, chunkZ);
                 SCANNED_CANDIDATES.put(key, activeCandidate);
             }
-            activeCandidate.add(blockId, blockWeight);
+            activeCandidate.add(info.id(), info.weight());
         }
         return true;
     }
@@ -290,6 +305,8 @@ public final class BaseFinder {
                 || block.equals("oxidized_copper_bulb") || block.endsWith("_candle")
                 || block.endsWith("_wall_candle");
     }
+
+    private record BlockInfo(String id, int weight) {}
 
     private static final class Candidate {
         final int chunkX;
