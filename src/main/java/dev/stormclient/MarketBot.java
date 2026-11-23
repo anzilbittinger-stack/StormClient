@@ -271,7 +271,11 @@ public final class MarketBot {
             ItemStack stack = inv.getItem(i);
             if (stack.isEmpty() || !BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(pendingItemId)) continue;
             if (i >= 9) {
-                clickSwapToHotbar(client, i, 8);
+                // In a server menu, the player's inventory follows the menu's own slots.
+                // Translate the player-inventory index instead of clicking the same numeric slot.
+                int menuSlot = client.player.containerMenu.slots.size() - 36 + i;
+                if (menuSlot < 0 || menuSlot >= client.player.containerMenu.slots.size()) return false;
+                clickSwapToHotbar(client, menuSlot, 8);
                 status = "Moving purchased item to hotbar";
                 actionCooldown = 8;
                 return true;
