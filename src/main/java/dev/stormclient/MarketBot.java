@@ -40,6 +40,7 @@ public final class MarketBot {
     private static Phase phase = Phase.IDLE;
     private static int actionCooldown;
     private static int currentPage = 1;
+    private static int filterCycles = 0;
     private static int targetBuyPage = 1;
     private static int orderPage = 1;
     private static boolean scanningOrders;
@@ -88,6 +89,7 @@ public final class MarketBot {
                     return;
                 }
                 if (phase == Phase.AUCTION_SCAN) {
+                    if (currentPage == 1 && !ensureCheapestFilter(client)) return;
                     scanAuctionPage(client);
                     return;
                 }
@@ -159,12 +161,61 @@ public final class MarketBot {
     private static void startAuctionScan(Minecraft client) {
         auctionListings.clear();
         currentPage = 1;
+        filterCycles = 0;
         targetBuyPage = 1;
         pendingBuySlot = -1;
         phase = Phase.AUCTION_SCAN;
         client.player.connection.sendCommand("ah");
         status = "Opening Auction House — page 1/" + MAX_PAGES;
         actionCooldown = 25;
+    }
+
+    /**
+     * Pear SMP's hopper cycles the auction sort mode immediately.
+     * Read its visible label/lore and cycle only until Lowest Price is selected.
+     * If the mode cannot be identified, do not guess and risk scanning the wrong order.
+     */
+    private static boolean ensureCheapestFilter(Minecraft client) {
+        var menu = client.player.containerMenu;
+        int hopperSlot = -1;
+        String filterText = "";
+        for (int i = 0; i < menu.slots.size(); i++) {
+            ItemStack stack = menu.slots.get(i).getItem();
+            if (stack.isEmpty()) continue;
+            String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            String name = stack.getHoverName().getString().toLowerCase(Locale.ROOT);
+            String lore = loreText(stack).toLowerCase(Locale.ROOT);
+            if (itemId.equals("minecraft:hopper") || name.contains("filter")) {
+                hopperSlot = i;
+                filterText = name + " " + lore;
+                break;
+            }
+        }
+        if (hopperSlot < 0) {
+            status = "Can't find auction hopper filter; not scanning";
+            actionCooldown = 20;
+            return false;
+        }
+        if (filterText.contains("lowest price") || filterText.contains("cheapest")) {
+            filterCycles = 0;
+            return true;
+        }
+        if (filterText.contains("highest price") || filterText.contains("recently listed")
+                || filterText.contains("newest") || filterText.contains("oldest")) {
+            if (filterCycles >= 3) {
+                status = "Couldn't select Lowest Price after 3 filter cycles";
+                phase = Phase.IDLE;
+                return false;
+            }
+            clickSlot(client, hopperSlot);
+            filterCycles++;
+            status = "Changing auction filter to Lowest Price (" + filterCycles + "/3)";
+            actionCooldown = 12;
+            return false;
+        }
+        status = "Hopper found, but its current filter label isn't readable; not guessing";
+        actionCooldown = 20;
+        return false;
     }
 
     private static void scanAuctionPage(Minecraft client) {
@@ -353,7 +404,9 @@ public final class MarketBot {
         String name = stack.getHoverName().getString().toLowerCase(Locale.ROOT);
         String lore = loreText(stack).toLowerCase(Locale.ROOT);
         String text = name + " " + lore;
-        return text.contains("next page") || text.contains("previous page")
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals("minecraft:hopper")
+                || BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals("minecraft:anvil")
+                || text.contains("next page") || text.contains("previous page")
                 || text.contains("prev page") || text.contains("click to search")
                 || text.contains("click to change") || text.contains("filter")
                 || text.contains("sort") || text.contains("your inventory");
